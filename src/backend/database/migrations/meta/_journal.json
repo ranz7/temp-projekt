@@ -15,6 +15,13 @@
       "when": 1756130400000,
       "tag": "0001__note__create__note",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787676874837,
+      "tag": "0002__judge__replace__note_with_judge_tables",
+      "breakpoints": true
     }
   ]
 }
