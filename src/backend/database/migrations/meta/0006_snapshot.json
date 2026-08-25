@@ -1,0 +1,1084 @@
+{
+  "id": "1718952f-15a3-4916-aa71-0cb4de2f6fa4",
+  "prevId": "5d9fc78a-7c81-41be-8b3d-72ef242a7c4e",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.account__user_": {
+      "name": "account__user_",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuid_generate_v7()"
+        },
+        "username_": {
+          "name": "username_",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at_": {
+          "name": "created_at_",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "account__user__username_lower__unique_idx_": {
+          "name": "account__user__username_lower__unique_idx_",
+          "columns": [
+            {
+              "expression": "lower(\"username_\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.benchmark__batch_": {
+      "name": "benchmark__batch_",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuid_generate_v7()"
+        },
+        "problem_id_": {
+          "name": "problem_id_",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "language_": {
+          "name": "language_",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "requested_count_": {
+          "name": "requested_count_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_count_": {
+          "name": "created_count_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "status_": {
+          "name": "status_",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'running'"
+        },
+        "last_error_": {
+          "name": "last_error_",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "started_at_": {
+          "name": "started_at_",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "ended_at_": {
+          "name": "ended_at_",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "benchmark__batch__started__idx_": {
+          "name": "benchmark__batch__started__idx_",
+          "columns": [
+            {
+              "expression": "started_at_",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "benchmark__batch__single_running__unique_idx_": {
+          "name": "benchmark__batch__single_running__unique_idx_",
+          "columns": [
+            {
+              "expression": "status_",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"benchmark__batch_\".\"status_\" = 'running'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "benchmark__batch__problem__fk_": {
+          "name": "benchmark__batch__problem__fk_",
+          "tableFrom": "benchmark__batch_",
+          "tableTo": "task__problem_",
+          "columnsFrom": [
+            "problem_id_"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.benchmark__batch_submission_": {
+      "name": "benchmark__batch_submission_",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuid_generate_v7()"
+        },
+        "batch_id_": {
+          "name": "batch_id_",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "submission_id_": {
+          "name": "submission_id_",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expects_accepted_": {
+          "name": "expects_accepted_",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at_": {
+          "name": "created_at_",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "benchmark__batch_submission__batch__idx_": {
+          "name": "benchmark__batch_submission__batch__idx_",
+          "columns": [
+            {
+              "expression": "batch_id_",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "benchmark__batch_submission__batch__fk_": {
+          "name": "benchmark__batch_submission__batch__fk_",
+          "tableFrom": "benchmark__batch_submission_",
+          "tableTo": "benchmark__batch_",
+          "columnsFrom": [
+            "batch_id_"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "benchmark__batch_submission__submission__fk_": {
+          "name": "benchmark__batch_submission__submission__fk_",
+          "tableFrom": "benchmark__batch_submission_",
+          "tableTo": "submission__submission_",
+          "columnsFrom": [
+            "submission_id_"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "benchmark__batch_submission__submission__unique_": {
+          "name": "benchmark__batch_submission__submission__unique_",
+          "nullsNotDistinct": false,
+          "columns": [
+            "submission_id_"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.machine__machine_": {
+      "name": "machine__machine_",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuid_generate_v7()"
+        },
+        "name_": {
+          "name": "name_",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "address_": {
+          "name": "address_",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "local_port_": {
+          "name": "local_port_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "enabled_": {
+          "name": "enabled_",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "reachable_": {
+          "name": "reachable_",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "capacity_": {
+          "name": "capacity_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "busy_": {
+          "name": "busy_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "version_": {
+          "name": "version_",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "problems_": {
+          "name": "problems_",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "judged_total_": {
+          "name": "judged_total_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "last_seen_at_": {
+          "name": "last_seen_at_",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error_": {
+          "name": "last_error_",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at_": {
+          "name": "created_at_",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "machine__machine__name__unique_idx_": {
+          "name": "machine__machine__name__unique_idx_",
+          "columns": [
+            {
+              "expression": "name_",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.submission__submission_": {
+      "name": "submission__submission_",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuid_generate_v7()"
+        },
+        "problem_id_": {
+          "name": "problem_id_",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id_": {
+          "name": "user_id_",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "language_": {
+          "name": "language_",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_code_": {
+          "name": "source_code_",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status_": {
+          "name": "status_",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'queued'"
+        },
+        "score_": {
+          "name": "score_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_score_": {
+          "name": "max_score_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "compile_message_": {
+          "name": "compile_message_",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "judge_message_": {
+          "name": "judge_message_",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_cpu_ms_": {
+          "name": "max_cpu_ms_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_memory_kb_": {
+          "name": "max_memory_kb_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at_": {
+          "name": "created_at_",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "judged_at_": {
+          "name": "judged_at_",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_expires_at_": {
+          "name": "lease_expires_at_",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "judge_claim_id_": {
+          "name": "judge_claim_id_",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "judge_attempts_": {
+          "name": "judge_attempts_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "machine_id_": {
+          "name": "machine_id_",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "checker_job_id_": {
+          "name": "checker_job_id_",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "submission__submission__problem__idx_": {
+          "name": "submission__submission__problem__idx_",
+          "columns": [
+            {
+              "expression": "problem_id_",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "submission__submission__user__idx_": {
+          "name": "submission__submission__user__idx_",
+          "columns": [
+            {
+              "expression": "user_id_",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "submission__submission__machine__idx_": {
+          "name": "submission__submission__machine__idx_",
+          "columns": [
+            {
+              "expression": "machine_id_",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "submission__submission__queued__idx_": {
+          "name": "submission__submission__queued__idx_",
+          "columns": [
+            {
+              "expression": "problem_id_",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at_",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"submission__submission_\".\"status_\" = 'queued'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "submission__submission__problem__fk_": {
+          "name": "submission__submission__problem__fk_",
+          "tableFrom": "submission__submission_",
+          "tableTo": "task__problem_",
+          "columnsFrom": [
+            "problem_id_"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "submission__submission__user__fk_": {
+          "name": "submission__submission__user__fk_",
+          "tableFrom": "submission__submission_",
+          "tableTo": "account__user_",
+          "columnsFrom": [
+            "user_id_"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "submission__submission__machine__fk_": {
+          "name": "submission__submission__machine__fk_",
+          "tableFrom": "submission__submission_",
+          "tableTo": "machine__machine_",
+          "columnsFrom": [
+            "machine_id_"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.submission__test_result_": {
+      "name": "submission__test_result_",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuid_generate_v7()"
+        },
+        "submission_id_": {
+          "name": "submission_id_",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "problem_test_id_": {
+          "name": "problem_test_id_",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ordinal_": {
+          "name": "ordinal_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "visibility_": {
+          "name": "visibility_",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "verdict_": {
+          "name": "verdict_",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "passed_": {
+          "name": "passed_",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "points_awarded_": {
+          "name": "points_awarded_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "message_": {
+          "name": "message_",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actual_output_": {
+          "name": "actual_output_",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "time_ms_": {
+          "name": "time_ms_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "memory_kb_": {
+          "name": "memory_kb_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "presses_": {
+          "name": "presses_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "submission__test_result__submission__idx_": {
+          "name": "submission__test_result__submission__idx_",
+          "columns": [
+            {
+              "expression": "submission_id_",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "submission__test_result__problem_test__idx_": {
+          "name": "submission__test_result__problem_test__idx_",
+          "columns": [
+            {
+              "expression": "problem_test_id_",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "submission__test_result__submission__fk_": {
+          "name": "submission__test_result__submission__fk_",
+          "tableFrom": "submission__test_result_",
+          "tableTo": "submission__submission_",
+          "columnsFrom": [
+            "submission_id_"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "submission__test_result__problem_test__fk_": {
+          "name": "submission__test_result__problem_test__fk_",
+          "tableFrom": "submission__test_result_",
+          "tableTo": "task__problem_test_",
+          "columnsFrom": [
+            "problem_test_id_"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "submission__test_result__submission_problem_test__unique_": {
+          "name": "submission__test_result__submission_problem_test__unique_",
+          "nullsNotDistinct": false,
+          "columns": [
+            "submission_id_",
+            "problem_test_id_"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.task__problem_": {
+      "name": "task__problem_",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuid_generate_v7()"
+        },
+        "slug_": {
+          "name": "slug_",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code_": {
+          "name": "code_",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title_": {
+          "name": "title_",
+          "type": "varchar(256)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "statement_": {
+          "name": "statement_",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "statement_markdown_": {
+          "name": "statement_markdown_",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "statement_input_": {
+          "name": "statement_input_",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "statement_output_": {
+          "name": "statement_output_",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "statement_notes_": {
+          "name": "statement_notes_",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "difficulty_": {
+          "name": "difficulty_",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rating_": {
+          "name": "rating_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tags_": {
+          "name": "tags_",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "kind_": {
+          "name": "kind_",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'stdio'"
+        },
+        "io_mode_": {
+          "name": "io_mode_",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'stdio'"
+        },
+        "languages_": {
+          "name": "languages_",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "time_limit_ms_": {
+          "name": "time_limit_ms_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "memory_limit_mb_": {
+          "name": "memory_limit_mb_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "checker_type_": {
+          "name": "checker_type_",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'token'"
+        },
+        "checker_path_": {
+          "name": "checker_path_",
+          "type": "varchar(512)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "package_dir_": {
+          "name": "package_dir_",
+          "type": "varchar(512)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_published_": {
+          "name": "is_published_",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at_": {
+          "name": "created_at_",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "task__problem__slug__unique_idx_": {
+          "name": "task__problem__slug__unique_idx_",
+          "columns": [
+            {
+              "expression": "slug_",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.task__problem_test_": {
+      "name": "task__problem_test_",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuid_generate_v7()"
+        },
+        "problem_id_": {
+          "name": "problem_id_",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ordinal_": {
+          "name": "ordinal_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "visibility_": {
+          "name": "visibility_",
+          "type": "varchar(16)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "input_": {
+          "name": "input_",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expected_output_": {
+          "name": "expected_output_",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "explanation_": {
+          "name": "explanation_",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "input_member_": {
+          "name": "input_member_",
+          "type": "varchar(512)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "output_member_": {
+          "name": "output_member_",
+          "type": "varchar(512)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "points_": {
+          "name": "points_",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {
+        "task__problem_test__problem__idx_": {
+          "name": "task__problem_test__problem__idx_",
+          "columns": [
+            {
+              "expression": "problem_id_",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "task__problem_test__problem__fk_": {
+          "name": "task__problem_test__problem__fk_",
+          "tableFrom": "task__problem_test_",
+          "tableTo": "task__problem_",
+          "columnsFrom": [
+            "problem_id_"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "task__problem_test__problem_visibility_ordinal__unique_": {
+          "name": "task__problem_test__problem_visibility_ordinal__unique_",
+          "nullsNotDistinct": false,
+          "columns": [
+            "problem_id_",
+            "visibility_",
+            "ordinal_"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

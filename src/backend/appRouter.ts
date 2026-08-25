@@ -1,5 +1,6 @@
 import { createTRPCRouter } from '@backend/trpc'
 import { accountRouter } from './modules/account/router'
+import { benchmarkRouter } from './modules/benchmark/router'
 import { machineRouter } from './modules/machine/router'
 import { rankingRouter } from './modules/ranking/router'
 import { submissionRouter } from './modules/submission/router'
@@ -10,7 +11,8 @@ export const appRouter = createTRPCRouter({
   task: taskRouter,
   submission: submissionRouter,
   ranking: rankingRouter,
-  machine: machineRouter
+  machine: machineRouter,
+  benchmark: benchmarkRouter
 })
 
 export type AppRouter = typeof appRouter
