@@ -7,16 +7,6 @@ import { ProblemMeta } from './problem-meta'
 import { ProblemSamples } from './problem-samples'
 import { StatementMarkdown } from './statement-markdown'
 
-/**
- * The backend is growing a single `statementMarkdown` document per problem
- * (title, input, output, constraints and example in one Markdown body) to
- * replace the four plain-text columns below. Until every problem carries
- * one, the DTO stays as `GetProblemOutputDTO` and this optional field is
- * read defensively, so today's four-section layout keeps working unchanged
- * for a problem that has not been migrated yet.
- */
-type ProblemWithStatementMarkdown = GetProblemOutputDTO & { statementMarkdown?: string | null }
-
 function StatementSection({ title, text }: { title: string; text: string | null }) {
   if (text === null || text.length === 0) {
     return null
@@ -31,7 +21,7 @@ function StatementSection({ title, text }: { title: string; text: string | null 
 }
 
 /** Left column: code, title, tags, limits and the full statement with samples. */
-export function ProblemStatement({ problem }: { problem: ProblemWithStatementMarkdown }) {
+export function ProblemStatement({ problem }: { problem: GetProblemOutputDTO }) {
   return (
     <Card className='gap-6'>
       <div className='flex flex-col gap-3'>
@@ -62,9 +52,7 @@ export function ProblemStatement({ problem }: { problem: ProblemWithStatementMar
         />
       </div>
 
-      {problem.statementMarkdown !== undefined &&
-      problem.statementMarkdown !== null &&
-      problem.statementMarkdown.length > 0 ? (
+      {problem.statementMarkdown !== null && problem.statementMarkdown.length > 0 ? (
         <StatementMarkdown text={problem.statementMarkdown} />
       ) : (
         <>
