@@ -2,7 +2,6 @@
 
 import { useMutation } from '@tanstack/react-query'
 import { TRPCClientError } from '@trpc/client'
-import { useRouter } from 'next/navigation'
 import { type FormEvent, useState } from 'react'
 import { z } from 'zod'
 import { useTRPC } from '@/app/_trpc/config'
@@ -33,14 +32,19 @@ function readableLoginError(error: unknown): string {
 
 export function LoginForm() {
   const trpc = useTRPC()
-  const router = useRouter()
   const [username, setUsername] = useState('')
 
   const logInMutation = useMutation(
     trpc.account.logIn.mutationOptions({
       onSuccess: () => {
-        router.refresh()
-        router.push('/')
+        // A client-side router.push() here can land on '/' before the root
+        // layout's Suspense-wrapped header (an async Server Component) has
+        // re-fetched with the new session cookie - Next's segment cache
+        // reuses the still-stale, signed-out header render. A full
+        // navigation always re-renders the whole tree from the server with
+        // the cookie the browser just received, so the header is correct
+        // the instant the page shows.
+        window.location.assign('/')
       }
     })
   )

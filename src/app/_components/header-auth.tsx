@@ -2,17 +2,20 @@
 
 import { useMutation } from '@tanstack/react-query'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useTRPC } from '@/app/_trpc/config'
 
 /** Signed-out state: a link to the login screen. Signed-in state: username plus sign out. */
 export function HeaderAuth({ username }: { username: string | null }) {
   const trpc = useTRPC()
-  const router = useRouter()
   const logOutMutation = useMutation(
     trpc.account.logOut.mutationOptions({
       onSuccess: () => {
-        router.refresh()
+        // router.refresh() alone leaves the root layout's Suspense-wrapped
+        // header on its stale, cached render (see the login form for the
+        // same issue in reverse). Reload the current page so every Server
+        // Component - the header included - re-renders against the cleared
+        // session cookie right away.
+        window.location.reload()
       }
     })
   )
