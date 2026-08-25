@@ -2,9 +2,7 @@ import { dehydrate } from '@tanstack/react-query'
 import { Inter } from 'next/font/google'
 import Script from 'next/script'
 import type { ReactNode } from 'react'
-import { Suspense } from 'react'
 import { SiteHeader } from './_components/site-header'
-import { SiteHeaderSkeleton } from './_components/site-header-skeleton'
 import { getQueryClient } from './_trpc/rsc'
 import './globals.css'
 import { GlobalProviders } from './providers'
@@ -46,9 +44,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         </Script>
         <GlobalProviders dehydratedState={dehydratedState}>
           <div className='flex min-h-svh flex-col'>
-            <Suspense fallback={<SiteHeaderSkeleton />}>
-              <SiteHeader />
-            </Suspense>
+            <SiteHeader />
             {children}
           </div>
         </GlobalProviders>
