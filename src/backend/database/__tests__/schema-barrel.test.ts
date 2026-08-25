@@ -1,6 +1,7 @@
 import {
   account__user_,
   CHECKER_TYPES,
+  machine__machine_,
   PROBLEM_DIFFICULTIES,
   SUBMISSION_LANGUAGES,
   SUBMISSION_STATUSES,
@@ -18,6 +19,7 @@ describe('database schema barrel', () => {
   it('re-exports every online judge table', () => {
     const tables = [
       account__user_,
+      machine__machine_,
       task__problem_,
       task__problem_test_,
       submission__submission_,
@@ -26,6 +28,7 @@ describe('database schema barrel', () => {
 
     expect(tables.map(getTableName)).toEqual([
       'account__user_',
+      'machine__machine_',
       'task__problem_',
       'task__problem_test_',
       'submission__submission_',
@@ -71,7 +74,7 @@ describe('schema value sets', () => {
     expect([...SUBMISSION_LANGUAGES]).toEqual(['python', 'cpp'])
   })
 
-  it('lists both checker types', () => {
-    expect([...CHECKER_TYPES]).toEqual(['token', 'custom'])
+  it('lists every checker type', () => {
+    expect([...CHECKER_TYPES]).toEqual(['token', 'custom', 'grader'])
   })
 })

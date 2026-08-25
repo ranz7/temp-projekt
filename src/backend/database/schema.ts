@@ -4,5 +4,6 @@
  */
 
 export * from '@backend/modules/account/schema'
+export * from '@backend/modules/machine/schema'
 export * from '@backend/modules/submission/schema'
 export * from '@backend/modules/task/schema'

@@ -29,6 +29,13 @@
       "when": 1787677396494,
       "tag": "0003__account__update__username_case_insensitive",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787688411226,
+      "tag": "0004__judge__update__machine_registry",
+      "breakpoints": true
     }
   ]
 }
