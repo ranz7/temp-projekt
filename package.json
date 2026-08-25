@@ -20,6 +20,7 @@
     "db:down": "docker compose down --remove-orphans",
     "db:migrate": "tsx src/backend/database/scripts/db-migrate.ts",
     "db:seed": "tsx src/backend/database/seed.ts",
+    "sweep": "tsx src/backend/modules/submission/scripts/run-sweeper.ts",
     "test": "vitest run --config vitest.unit.config.ts --no-file-parallelism",
     "test:integration": "vitest run --config vitest.integration.config.ts --no-file-parallelism"
   },
