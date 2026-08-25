@@ -7,8 +7,9 @@ Scope: Next.js 16 App Router. Homepage + HTTP handlers.
 - `/` - problem list with recent submissions activity panel
 - `/problems/<slug>` - problem detail and submit editor
 - `/ranking` - global ranking
+- `/submissions` - public activity feed, no source code
+- `/submissions/mine` - submissions by the signed-in user
 - `/submissions/<id>` - submission detail (author only)
-- `/my-submissions` - submissions by the signed-in user
 - `api/trpc` - tRPC endpoints
 
 ## Folder conventions
