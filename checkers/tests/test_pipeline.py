@@ -158,6 +158,40 @@ class JudgeSubmissionTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             judge(job)
 
+    def test_a_solution_is_accepted_only_when_every_hidden_test_passes(self) -> None:
+        """One hidden test out of two failing must not be accepted, and only the
+        passed one's points count - not zero, not the full total."""
+        with tempfile.TemporaryDirectory() as packages_root:
+            package_dir = Path(packages_root) / "partial-pkg"
+            tests_dir = package_dir / "tests"
+            tests_dir.mkdir(parents=True)
+            (tests_dir / "01.in").write_text("1\n", encoding="utf-8")
+            (tests_dir / "01.out").write_text("one\n", encoding="utf-8")
+            (tests_dir / "02.in").write_text("2\n", encoding="utf-8")
+            (tests_dir / "02.out").write_text("two\n", encoding="utf-8")
+
+            source = (
+                "import sys\n"
+                "value = sys.stdin.read().strip()\n"
+                "print('one' if value == '1' else 'WRONG')\n"
+            )
+            job = make_job(
+                source_code=source,
+                package_directory="partial-pkg",
+                tests=[
+                    hidden_test(1, "01.in", "01.out", points=2),
+                    hidden_test(2, "02.in", "02.out", points=3),
+                ],
+            )
+            report = judge(job, packages_path=Path(packages_root))
+
+        self.assertEqual(report.status, "wrong_answer")
+        self.assertNotEqual(report.status, "accepted")
+        self.assertEqual([test.passed for test in report.tests], [True, False])
+        # Only the passed test's points count - not zero, and not the full 5.
+        self.assertEqual(report.score, 2)
+        self.assertEqual(report.max_score, 5)
+
 
 @unittest.skipUnless(
     (PROBLEMS_PATH / SHIPPED_PACKAGE / "tests" / "01.in").is_file(),

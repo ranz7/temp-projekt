@@ -15,6 +15,7 @@ import { seedTaskProblems } from '@backend/modules/task/seed'
 import { createCallerFactory, createTRPCContext } from '@backend/trpc'
 import { and, eq, like } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { POST as claimRoute } from '@/app/api/internal/checker/claim/route'
 
 const createCaller = createCallerFactory(appRouter)
 
@@ -76,10 +77,13 @@ async function findProblemTestId(visibility: 'public' | 'hidden'): Promise<strin
   return test.id
 }
 
+const checkerServiceKey = 'itest-submission-checker-service-key'
+
 beforeAll(async () => {
   process.env.SESSION_SECRET ??= 'integration-test-secret'
   // Nothing listens here, so every wake-up fails - exactly the outage the spec cares about.
   process.env.REDIS_URL = 'redis://127.0.0.1:6399'
+  process.env.SERVICE_KEY = checkerServiceKey
   await seedTaskProblems(db)
 })
 
@@ -129,6 +133,45 @@ describe('submission.createSubmission', () => {
     expect(rows).toHaveLength(1)
     // Left empty on purpose: the sweeper knows this one still needs publishing.
     expect(rows[0].queue_published_at_).toBeNull()
+  })
+
+  it('still lets a checker claim and judge the solution once Redis is down', async () => {
+    const author = await signIn('offline-claimable')
+    const trpc = await callerFor(author.id)
+
+    const created = await trpc.submission.createSubmission({
+      problemSlug,
+      language: 'python',
+      sourceCode: pythonSource
+    })
+
+    // No sweeper involved here: a checker's own poll finds the row exactly as it was
+    // left by createSubmission, proving the outage never kept it from being judged.
+    const headers = new Headers({ 'content-type': 'application/json' })
+    headers.set('x-service-key', checkerServiceKey)
+
+    const claimResponse = await claimRoute(
+      new Request('http://127.0.0.1/api/internal/checker/claim', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          contractVersion: 1,
+          workerId: 'itest-offline-claim-worker',
+          languages: ['python', 'cpp']
+        })
+      })
+    )
+
+    expect(claimResponse.status).toBe(200)
+
+    const payload = (await claimResponse.json()) as { job: { submissionId: string } | null }
+
+    expect(payload.job).not.toBeNull()
+    expect(payload.job?.submissionId).toBe(created.id)
+
+    const [row] = await findSubmissionRows(author.id)
+
+    expect(row.status_).toBe('running')
   })
 
   it('refuses a language the judge does not run and saves nothing', async () => {
