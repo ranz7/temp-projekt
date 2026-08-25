@@ -1,5 +1,4 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import { isProduction } from '@shared/environment'
 
 /** Name of the cookie carrying the signed-in user. */
 export const SESSION_COOKIE_NAME = 'oj_session'
@@ -62,21 +61,77 @@ export function readSessionUserId(cookieHeader: string | null): string | null {
   return value === null ? null : verifySession(value)
 }
 
-function cookieAttributes(maxAgeSeconds: number): string {
+/**
+ * How the app was reached, as far as this one request can tell.
+ * `url` is the address the app itself received; behind a proxy that is the
+ * inside-the-network address, so the forwarded headers matter more.
+ */
+export type RequestOrigin = {
+  headers: Headers
+  url?: string | null
+}
+
+/** Every protocol named by the proxy headers, lowercased. */
+function forwardedProtocols(headers: Headers): string[] {
+  const protocols: string[] = []
+
+  const forwardedProto = headers.get('x-forwarded-proto')
+  if (forwardedProto !== null) {
+    protocols.push(...forwardedProto.split(',').map(entry => entry.trim().toLowerCase()))
+  }
+
+  // RFC 7239: `Forwarded: for=1.2.3.4;proto=https, for=5.6.7.8`
+  const forwarded = headers.get('forwarded')
+  if (forwarded !== null) {
+    for (const match of forwarded.matchAll(/proto\s*=\s*"?([A-Za-z]+)"?/g)) {
+      protocols.push(match[1].toLowerCase())
+    }
+  }
+
+  return protocols
+}
+
+/** `SESSION_COOKIE_SECURE` when the deployment sets it, otherwise null for "work it out". */
+function configuredCookieSecurity(): boolean | null {
+  const setting = process.env.SESSION_COOKIE_SECURE?.trim().toLowerCase()
+  if (setting === undefined || setting === '' || setting === 'auto') return null
+
+  return setting === 'true' || setting === '1' || setting === 'on' || setting === 'yes'
+}
+
+/**
+ * Was this request genuinely reached over HTTPS?
+ *
+ * A browser throws away a `Secure` cookie that arrives over plain HTTP, so
+ * marking it `Secure` on an HTTP-only deployment means nobody can log in.
+ * Any signal saying HTTPS wins, so a caller sending `x-forwarded-proto: http`
+ * to an HTTPS site cannot talk the app out of `Secure`. A deployment that does
+ * not trust its proxy at all sets `SESSION_COOKIE_SECURE=true` and settles it.
+ */
+export function isSecureRequest(origin: RequestOrigin): boolean {
+  const configured = configuredCookieSecurity()
+  if (configured !== null) return configured
+
+  if (forwardedProtocols(origin.headers).includes('https')) return true
+
+  return origin.url?.toLowerCase().startsWith('https:') === true
+}
+
+function cookieAttributes(maxAgeSeconds: number, secure: boolean): string {
   const attributes = ['Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${maxAgeSeconds}`]
-  if (isProduction()) attributes.push('Secure')
+  if (secure) attributes.push('Secure')
 
   return attributes.join('; ')
 }
 
 /** `Set-Cookie` value that signs the user in for thirty days. */
-export function buildSessionCookie(userId: string): string {
-  return `${SESSION_COOKIE_NAME}=${signSession(userId)}; ${cookieAttributes(SESSION_MAX_AGE_SECONDS)}`
+export function buildSessionCookie(userId: string, secure: boolean): string {
+  return `${SESSION_COOKIE_NAME}=${signSession(userId)}; ${cookieAttributes(SESSION_MAX_AGE_SECONDS, secure)}`
 }
 
 /** `Set-Cookie` value that signs the current user out. */
-export function buildClearedSessionCookie(): string {
-  return `${SESSION_COOKIE_NAME}=; ${cookieAttributes(0)}`
+export function buildClearedSessionCookie(secure: boolean): string {
+  return `${SESSION_COOKIE_NAME}=; ${cookieAttributes(0, secure)}`
 }
 
 function requireResponseHeaders(resHeaders: Headers | null): Headers {
@@ -88,11 +143,15 @@ function requireResponseHeaders(resHeaders: Headers | null): Headers {
 }
 
 /** Signs the user in by appending the session cookie to the response. */
-export function setSessionCookie(resHeaders: Headers | null, userId: string): void {
-  requireResponseHeaders(resHeaders).append('set-cookie', buildSessionCookie(userId))
+export function setSessionCookie(
+  resHeaders: Headers | null,
+  userId: string,
+  secure: boolean
+): void {
+  requireResponseHeaders(resHeaders).append('set-cookie', buildSessionCookie(userId, secure))
 }
 
 /** Signs the current user out by expiring the session cookie. */
-export function clearSessionCookie(resHeaders: Headers | null): void {
-  requireResponseHeaders(resHeaders).append('set-cookie', buildClearedSessionCookie())
+export function clearSessionCookie(resHeaders: Headers | null, secure: boolean): void {
+  requireResponseHeaders(resHeaders).append('set-cookie', buildClearedSessionCookie(secure))
 }

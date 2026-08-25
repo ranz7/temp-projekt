@@ -8,7 +8,7 @@ export const logOutProcedure = publicProcedure
   .input(LogOutInputDTOZ)
   .output(LogOutOutputDTOZ)
   .mutation(({ ctx }) => {
-    clearSessionCookie(ctx.resHeaders)
+    clearSessionCookie(ctx.resHeaders, ctx.isSecureConnection)
 
     return { loggedOut: true }
   })
