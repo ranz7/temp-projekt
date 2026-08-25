@@ -4,8 +4,13 @@ Scope: Next.js 16 App Router. Homepage + HTTP handlers.
 
 ## Surfaces
 
-- `/` - public notes list
-- `api/trpc` - tRPC
+- `/` - problem list with recent submissions activity panel
+- `/problems/<slug>` - problem detail and submit editor
+- `/ranking` - global ranking
+- `/submissions` - public activity feed, no source code
+- `/submissions/mine` - submissions by the signed-in user
+- `/submissions/<id>` - submission detail (author only)
+- `api/trpc` - tRPC endpoints
 
 ## Folder conventions
 
@@ -19,7 +24,7 @@ Server Components by default. `"use client"` only when state, effects, browser A
 Data fetching in RSC: `prefetch` / `prefetchAwaited` from `@/app/_trpc/rsc`.
 Client: `useTRPC()` from `@/app/_trpc/config`.
 Every route that waits on data ships a `loading.tsx` beside its `page.tsx`.
-User-facing copy on `/` is Polish except the heading `Notes` and seeded English note text.
+Interface copy is English throughout; problem statements render in their original language.
 
 ## React conventions
 

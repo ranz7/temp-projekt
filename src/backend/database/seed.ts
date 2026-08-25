@@ -1,13 +1,13 @@
 import '@backend/database/load-env'
 import { db } from '@backend/database/db'
-import { seedNotes } from '@backend/modules/note/seed'
+import { seedTaskProblems } from '@backend/modules/task/seed'
 
-async function seed() {
-  await seedNotes()
+export async function seedDatabase(): Promise<void> {
+  await seedTaskProblems(db)
   await db.$client?.end()
 }
 
-seed().catch(error => {
+seedDatabase().catch(error => {
   console.error(error)
   process.exit(1)
 })

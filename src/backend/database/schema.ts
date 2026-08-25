@@ -3,4 +3,6 @@
  * Everywhere else, import tables from the owning module.
  */
 
-export * from '@backend/modules/note/schema'
+export * from '@backend/modules/account/schema'
+export * from '@backend/modules/submission/schema'
+export * from '@backend/modules/task/schema'

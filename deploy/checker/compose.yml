@@ -1,0 +1,52 @@
+# The two checker workers.
+#
+# Neither declares a container name or publishes a host port, because both would
+# stop `docker compose up --scale` dead. Compose still names the replicas
+# predictably - projekt-checker-bwrap-1, -2, -3 - and each health endpoint is
+# reached inside the compose network rather than from the host.
+#
+# Every replica mounts the same read-only problem packages, so any replica can
+# judge any problem and no replica depends on a file only it has.
+
+services:
+  checker-bwrap:
+    image: ${CHECKER_BWRAP_IMAGE:-projekt-checker-bwrap:local}
+    build:
+      context: ../..
+      dockerfile: deploy/checker/Dockerfile.bwrap
+    restart: unless-stopped
+    env_file:
+      - path: ./.env.example
+        required: true
+      - path: ./.env
+        required: false
+    # Why each of these is here is written out in deploy/README.md. In short:
+    # SYS_ADMIN lets bubblewrap create the namespaces and pivot_root into the
+    # sandbox, NET_ADMIN lets it raise loopback inside the unshared network, and
+    # the default seccomp profile blocks pivot_root outright. Nothing here is
+    # `privileged: true`, which would also hand over every other capability.
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+    security_opt:
+      - seccomp=unconfined
+    volumes:
+      - ${PROBLEM_PACKAGES_HOST_PATH:-../../problems}:${PROBLEM_PACKAGES_PATH:-/problems}:ro
+      # Anonymous, so every replica gets a scratch directory of its own.
+      - ${CHECKER_SCRATCH_PATH:-/scratch}
+
+  checker-cpp:
+    image: ${CHECKER_CPP_IMAGE:-projekt-checker-cpp:local}
+    build:
+      context: ../..
+      dockerfile: deploy/checker/Dockerfile.cpp
+    restart: unless-stopped
+    env_file:
+      - path: ./.env.example
+        required: true
+      - path: ./.env
+        required: false
+    # It compiles nothing and runs nothing: no capabilities, non-root user.
+    volumes:
+      - ${PROBLEM_PACKAGES_HOST_PATH:-../../problems}:${PROBLEM_PACKAGES_PATH:-/problems}:ro
+      - ${CHECKER_SCRATCH_PATH:-/scratch}

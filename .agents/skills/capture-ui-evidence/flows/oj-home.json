@@ -1,0 +1,73 @@
+[
+  {
+    "action": "assert",
+    "selector": "h1:has-text('Problems')",
+    "state": "visible"
+  },
+  {
+    "action": "fill",
+    "selector": "input[placeholder=\"Search by code or title\"]",
+    "value": "water"
+  },
+  {
+    "action": "wait",
+    "ms": 700
+  },
+  {
+    "action": "assert",
+    "selector": "text=Watermelon",
+    "state": "visible",
+    "screenshot": true
+  },
+  {
+    "action": "fill",
+    "selector": "input[placeholder=\"Search by code or title\"]",
+    "value": "zzzz"
+  },
+  {
+    "action": "wait",
+    "ms": 700
+  },
+  {
+    "action": "assert",
+    "selector": "text=No problems match these filters.",
+    "state": "visible",
+    "screenshot": true
+  },
+  {
+    "action": "fill",
+    "selector": "input[placeholder=\"Search by code or title\"]",
+    "value": ""
+  },
+  {
+    "action": "wait",
+    "ms": 700
+  },
+  {
+    "action": "click",
+    "selector": "[aria-label='Toggle theme']"
+  },
+  {
+    "action": "wait",
+    "ms": 500
+  },
+  {
+    "action": "assert",
+    "selector": "text=Watermelon",
+    "state": "visible",
+    "screenshot": true
+  },
+  {
+    "action": "click",
+    "selector": "[aria-label='Toggle theme']"
+  },
+  {
+    "action": "wait",
+    "ms": 400
+  },
+  {
+    "action": "assert",
+    "selector": "text=Recent activity",
+    "state": "visible"
+  }
+]

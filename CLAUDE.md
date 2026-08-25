@@ -4,10 +4,9 @@ Single source for all agents — `AGENTS.md` points here. Skills: canonical `.ag
 
 ## What this is
 
-Runnable Kraken-shaped skeleton: Next.js App Router, tRPC, Drizzle, Postgres.
-One public module (`note`) and `/` listing its rows.
-No auth, workspaces, or design system.
-`.ai/` is gitignored scratch: checked-out copies of other repos, read while porting.
+An online judge: people submit Python or C++ solutions to programming problems, watch them being judged, and compete in a global ranking.
+The app runs on one Next.js server that owns Postgres and Redis; checker workers run on separate machines and stay stateless.
+Python submissions are judged inside a bubblewrap sandbox; C++ is handed to OIOIOI, a separate service.
 
 ## Lanes
 
@@ -39,7 +38,9 @@ bun run format              # Biome format --write
 bun run typecheck           # tsc --noEmit
 bun run db:up / db:down     # Start / stop local Postgres (Docker)
 bun run db:migrate          # Apply migrations
-bun run db:seed             # Seed notes if the table is empty
+bun run db:seed             # Seed the Watermelon problem if empty
+bun run stack:up            # docker compose up -d --build
+bun run stack:down          # Stop all containers
 bun run test                # Unit
 bun run test:integration    # Integration (tRPC caller + real DB `projekt_test`)
 ```
@@ -75,20 +76,51 @@ Everything on GitHub and in the codebase is English — issues, PRs, comments, c
 
 ```
 src/
-├── app/                 App Router — UI + HTTP handlers
-│   ├── page.tsx         homepage, prefetches listNotes
-│   ├── _components/     homepage cards and skeleton
+├── app/                 App Router — web UI + HTTP handlers
+│   ├── page.tsx         problems list with recent submissions
+│   ├── problems/        problem detail + submit editor
+│   ├── ranking/         global and per-problem rankings
+│   ├── submissions/     submission detail (my submissions)
+│   ├── _components/     shared UI components
 │   ├── _trpc/           client, RSC caller, query client
-│   └── api/trpc/
+│   └── api/trpc/        tRPC handler
 ├── shared/              environment helpers
 └── backend/
-    ├── appRouter.ts     { note }
+    ├── appRouter.ts     { account, task, submission, ranking }
     ├── trpc/            init, context, publicProcedure
     ├── database/        db, schema barrel, migrations, seed
-    └── modules/note/    vertical slice
+    └── modules/
+        ├── account/     username login + session
+        ├── task/        problem list + detail reads
+        ├── submission/  submit, judge, list, sweeper
+        └── ranking/     global + per-problem rankings
 ```
 
 Path aliases: `@backend/*` → `src/backend/*`, `@shared/*` → `src/shared/*`, `@/*` → `src/*`.
+
+## Deployables
+
+**Web server** (`deploy/web/Dockerfile`):
+- Next.js app, tRPC API, checker endpoints, login session.
+- Owns Postgres 17 and Redis.
+- One instance per environment.
+- Sweeper process re-announces expired submissions.
+
+**Checker workers** (`deploy/checker/Dockerfile.bwrap`, `Dockerfile.cpp`):
+- Stateless Python processes; many replicas per environment.
+- Python checker claims and judges Python submissions inside bubblewrap.
+- C++ checker claims C++ submissions, submits to OIOIOI, polls for results.
+- No disk state except scratch directory deleted after each job.
+
+**OIOIOI** (separate, optional):
+- External service outside this repository.
+- C++ checker calls it; left unconfigured, C++ submissions stay queued with a readable reason.
+
+## Language support
+
+- **Python**: judges code inside bubblewrap sandbox with CPU and memory limits.
+- **C++**: submits to OIOIOI and translates the verdict back.
+- **Other**: refused at submit time with a validation error.
 
 **Full specs:**
 - Backend conventions, DB rules, testing → `src/backend/CLAUDE.md`
@@ -98,6 +130,13 @@ Path aliases: `@backend/*` → `src/backend/*`, `@shared/*` → `src/shared/*`, 
 ## File and Directory Naming
 
 Only `a-z`, `0-9`, `-`, `_`, `.`. Endpoint directories are kebab-case verb-noun (`list-notes`). Migrations are `<idx>__<module>__<action>__<subject>.sql`. Timestamped files (specs, research): `YYYY-MM-DD-HH.MM-description.md`.
+
+## Environment variables
+
+See the environment variable table in `README.md`.
+Every setting comes from `.env` (root) or `deploy/<service>/.env` (per-service), layered over `.env.example`.
+`SERVICE_KEY` must match between `deploy/web/.env*` and `deploy/checker/.env*` byte-for-byte.
+No secrets go in git.
 
 ## Agent Context
 

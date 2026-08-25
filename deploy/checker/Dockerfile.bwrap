@@ -1,0 +1,49 @@
+# The sandboxed checker: it runs Python submissions itself, inside bubblewrap,
+# with cgroup v2 caps on memory and process count.
+#
+# Problem packages are never baked in. Every replica mounts the same read-only
+# directory, so any replica can judge any problem.
+
+FROM python:3.13-slim-trixie
+
+# bubblewrap is the sandbox; nothing else is installed, so a submission finds
+# no compiler, no shell tooling and no network client to reach for.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends bubblewrap \
+ && rm -rf /var/lib/apt/lists/*
+
+# The only dependency: the Redis client used for wake-ups. Without Redis the
+# worker polls instead, so this is a latency dependency, not a hard one.
+RUN pip install --no-cache-dir "redis==8.1.0"
+
+WORKDIR /app
+COPY checkers/common ./common
+COPY checkers/bwrap ./bwrap
+COPY checkers/pyproject.toml ./pyproject.toml
+COPY deploy/checker/entrypoint-bwrap.sh /usr/local/bin/entrypoint-bwrap.sh
+RUN chmod +x /usr/local/bin/entrypoint-bwrap.sh
+
+# Image-level defaults. Everything here is overridden from the service env file.
+# This base image keeps its interpreter under /usr/local, which bubblewrap mounts
+# read only along with the rest of /usr.
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHON_PATH=/usr/local/bin/python3
+ENV BWRAP_PATH=/usr/bin/bwrap
+ENV CHECKER_HEALTH_PORT=8080
+ENV CHECKER_SCRATCH_PATH=/scratch
+ENV PROBLEM_PACKAGES_PATH=/problems
+
+# One job at a time writes here and the directory is emptied when the job ends.
+# A volume per replica, so scaling never makes two workers share a workspace.
+RUN mkdir -p /scratch
+VOLUME ["/scratch"]
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=5s --timeout=5s --start-period=15s --retries=3 \
+  CMD python3 -c "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ['CHECKER_HEALTH_PORT'] + '/health', timeout=3)" || exit 1
+
+# The script execs the worker, so Python is PID 1 and SIGTERM reaches its own
+# handler rather than a shell that would swallow it.
+ENTRYPOINT ["/usr/local/bin/entrypoint-bwrap.sh"]
