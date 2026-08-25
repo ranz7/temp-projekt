@@ -1,9 +1,14 @@
 """
-Judging one Python submission: stage the source once, then run every test.
+Judging one submission: build it once, then run every test.
 
 Every test runs even after one has failed, so the person is shown a complete list.
-The submission's own status is the verdict of the first failing test, and its score
-is the points of the hidden tests that passed.
+The submission's own status is the verdict of the first failing test, and its score is
+the points of the hidden tests that passed; public samples are worth nothing.
+
+An ordinary problem compares the program's output with the expected file, or scores it
+with the problem's own checker script. An interactive problem has no expected file at
+all: the submission is built into one program with the problem's grader, and the
+verdict is whatever that grader printed.
 """
 
 from __future__ import annotations
@@ -16,29 +21,34 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-from common.contract import (
+from .cgroup import CgroupLeaf, add_process, create_leaf, kill_all, remove_leaf
+from .compare import is_full_score, run_custom_checker, token_compare_files
+from .compile import compile_submission, submission_python_path
+from .limits import RunLimits
+from .measure import measure_process_group
+from .package import CUSTOM_CHECKER, PackageTest, ProblemPackage, load_package
+from .report import (
     ACCEPTED,
-    COMPILATION_ERROR,
     MEMORY_LIMIT,
     PASSED,
     RUNTIME_ERROR,
     TIME_LIMIT,
     WRONG_ANSWER,
-    FinalReport,
-    Job,
-    JobTest,
-    Release,
-    TestReport,
+    JudgeCancelled,
+    JudgeRequest,
+    JudgeResult,
+    TestResult,
+    compilation_error,
+    internal_error,
 )
-
-from .cgroup import CgroupLeaf, add_process, create_leaf, kill_all, remove_leaf
-from .compare import is_full_score, run_custom_checker, token_compare_files
-from .compile import compile_submission
-from .limits import RunLimits
-from .measure import measure_process_group
-from .package import PackageError, hidden_test_path
 from .spawn import SpawnSpec, spawn_sandboxed
-from .verdict import RUN_FINISHED, classify_run
+from .verdict import (
+    GRADER_SILENT,
+    GRADER_UNRECOGNISED,
+    RUN_FINISHED,
+    classify_run,
+    read_grader_verdict,
+)
 from .wall_watchdog import WallWatchdog
 
 logger = logging.getLogger(__name__)
@@ -46,13 +56,8 @@ logger = logging.getLogger(__name__)
 # How much of a program's output is kept for the page that shows it.
 OUTPUT_PREVIEW_LIMIT = 4000
 
-
-@dataclass(frozen=True)
-class TestPaths:
-    """Where one test's input and expected output live for this run."""
-
-    input_path: Path
-    expected_path: Path
+# How much of the end of a program's output is searched for the grader's verdict.
+GRADER_TAIL_LIMIT = 64 * 1024
 
 
 def clip(text: str, limit: int = OUTPUT_PREVIEW_LIMIT) -> str:
@@ -69,27 +74,16 @@ def read_preview(path: Path, limit: int = OUTPUT_PREVIEW_LIMIT) -> str:
     return clip(raw[: limit * 2].decode("utf-8", errors="replace"), limit)
 
 
-def prepare_test_paths(
-    job: Job, test: JobTest, *, scratch: Path, packages_path: Path
-) -> TestPaths:
-    """A sample is written out of the payload; a hidden test is read from the disk."""
-    if test.is_hidden:
-        return TestPaths(
-            input_path=hidden_test_path(
-                packages_path, job.package_directory, test.input_file or ""
-            ),
-            expected_path=hidden_test_path(
-                packages_path, job.package_directory, test.output_file or ""
-            ),
-        )
-
-    directory = Path(scratch) / "samples"
-    directory.mkdir(parents=True, exist_ok=True)
-    input_path = directory / f"{test.ordinal:03d}.in"
-    expected_path = directory / f"{test.ordinal:03d}.out"
-    input_path.write_text(test.input_text or "", encoding="utf-8")
-    expected_path.write_text(test.expected_output or "", encoding="utf-8")
-    return TestPaths(input_path=input_path, expected_path=expected_path)
+def read_tail(path: Path, limit: int = GRADER_TAIL_LIMIT) -> str:
+    """The end of a file. The grader speaks last, so its line is at the end."""
+    try:
+        with open(path, "rb") as handle:
+            handle.seek(0, 2)
+            handle.seek(max(0, handle.tell() - limit))
+            raw = handle.read()
+    except OSError:
+        return ""
+    return raw.decode("utf-8", errors="replace")
 
 
 def _open_cgroup(name: str, limits: RunLimits) -> CgroupLeaf | None:
@@ -103,7 +97,7 @@ def _open_cgroup(name: str, limits: RunLimits) -> CgroupLeaf | None:
 
 @dataclass(frozen=True)
 class RunOutcome:
-    """One finished test run, before its output was compared."""
+    """One finished test run, before its output was looked at."""
 
     verdict: str
     cpu_ms: int
@@ -118,7 +112,7 @@ def run_one_test(
     *,
     run_argv: Sequence[str],
     work_dir: Path,
-    paths: TestPaths,
+    input_path: Path,
     limits: RunLimits,
     run_name: str,
 ) -> RunOutcome:
@@ -136,7 +130,7 @@ def run_one_test(
             SpawnSpec(
                 work_dir=Path(work_dir),
                 run_argv=list(run_argv),
-                stdin_path=paths.input_path,
+                stdin_path=input_path,
                 stdout_path=stdout_path,
                 stderr_path=stderr_path,
             )
@@ -205,21 +199,20 @@ def run_one_test(
 
 
 def compare_output(
-    job: Job,
-    paths: TestPaths,
-    stdout_path: Path,
-    *,
-    checker_script: Path | None,
+    package: ProblemPackage, test: PackageTest, stdout_path: Path
 ) -> tuple[bool, str | None]:
     """Whitespace-insensitive by default; a problem may bring its own checker."""
-    if job.checker_type == "custom":
-        if checker_script is None:
+    if test.expected_path is None:
+        return False, "this test has no expected output"
+
+    if package.checker_type == CUSTOM_CHECKER:
+        if package.checker_path is None:
             return False, "the problem names a checker script that is not there"
         try:
             score = run_custom_checker(
-                checker_script,
-                paths.input_path,
-                paths.expected_path,
+                package.checker_path,
+                test.input_path,
+                test.expected_path,
                 stdout_path,
                 python_executable=sys.executable,
             )
@@ -230,9 +223,51 @@ def compare_output(
             return True, None
         return False, f"the problem checker scored this answer {score:g} out of 1"
 
-    if token_compare_files(paths.expected_path, stdout_path):
+    if token_compare_files(test.expected_path, stdout_path):
         return True, None
     return False, "wrong answer"
+
+
+@dataclass(frozen=True)
+class _TestOutcome:
+    """One judged test, before it becomes a row."""
+
+    verdict: str
+    message: str | None = None
+    presses: int | None = None
+    internal_error_message: str | None = None
+
+
+def _judge_ordinary_run(
+    package: ProblemPackage, test: PackageTest, outcome: RunOutcome
+) -> _TestOutcome:
+    correct, message = compare_output(package, test, outcome.stdout_path)
+    return _TestOutcome(verdict=PASSED if correct else WRONG_ANSWER, message=message)
+
+
+def _judge_interactive_run(test: PackageTest, outcome: RunOutcome) -> _TestOutcome:
+    """The grader's own words are the verdict; nothing is compared against a file."""
+    said = read_grader_verdict(read_tail(outcome.stdout_path))
+
+    if said.verdict == GRADER_SILENT:
+        return _TestOutcome(verdict=RUNTIME_ERROR, message=said.message)
+    if said.verdict == GRADER_UNRECOGNISED:
+        return _TestOutcome(
+            verdict=RUNTIME_ERROR,
+            internal_error_message=f"test {test.ordinal}: {said.message}",
+        )
+    return _TestOutcome(verdict=said.verdict, message=said.message, presses=said.presses)
+
+
+def _runtime_error_message(outcome: RunOutcome) -> str:
+    detail = read_preview(outcome.stderr_path, 500).strip()
+    message = f"runtime error (exit code {outcome.exit_code})"
+
+    if outcome.signal_number:
+        message = f"runtime error (killed by signal {outcome.signal_number})"
+    if detail:
+        message = f"{message}: {detail}"
+    return message
 
 
 def _submission_status(first_failure: str | None) -> str:
@@ -242,109 +277,110 @@ def _submission_status(first_failure: str | None) -> str:
 
 
 def judge_submission(
-    job: Job,
+    request: JudgeRequest,
     scratch: Path,
     *,
     packages_path: Path,
     python_executable: str | None = None,
-    checker_script: Path | None = None,
     stop: threading.Event | None = None,
-) -> FinalReport | Release:
-    """Judge one submission end to end and build the report the app stores."""
+) -> JudgeResult:
+    """Judge one submission end to end and build the report the app stores.
+
+    Raises `PackageError` when this machine cannot read the problem at all, and
+    `JudgeCancelled` when `stop` is set part way, so the submission stays waiting
+    instead of being failed.
+    """
+    package = load_package(packages_path, request.package_directory)
     work_dir = Path(scratch) / "work"
     work_dir.mkdir(parents=True, exist_ok=True)
-    limits = RunLimits(time_limit_ms=job.time_limit_ms, memory_limit_mb=job.memory_limit_mb)
+    limits = RunLimits(
+        time_limit_ms=package.time_limit_ms, memory_limit_mb=package.memory_limit_mb
+    )
+    max_score = package.hidden_points
 
     compiled = compile_submission(
-        job.language, job.source_code, work_dir, python_executable=python_executable
+        request.language,
+        request.source_code,
+        work_dir,
+        python_executable=python_executable or submission_python_path(),
+        grader=package.grader,
     )
 
     if not compiled.ok:
         # A submission that will not build has no test rows at all.
-        return FinalReport(
-            status=COMPILATION_ERROR,
-            score=0.0,
-            max_score=job.hidden_points,
-            compile_message=clip(compiled.compiler_message or "the submission does not compile"),
-            tests=[],
+        return compilation_error(
+            clip(compiled.compiler_message or "the submission does not compile"),
+            max_score=max_score,
         )
 
-    reports: list[TestReport] = []
+    rows: list[TestResult] = []
     first_failure: str | None = None
     score = 0.0
     max_cpu_ms = 0
     max_memory_kb = 0
 
-    for test in job.tests:
+    for test in package.tests:
         if stop is not None and stop.is_set():
-            return Release("the checker is shutting down", keep_scratch=False)
-
-        try:
-            paths = prepare_test_paths(job, test, scratch=scratch, packages_path=packages_path)
-        except (PackageError, OSError) as error:
-            # Without the test files nothing can be judged, so the whole submission
-            # fails rather than one test quietly turning into a wrong answer.
-            raise RuntimeError(f"test {test.ordinal} cannot be read: {error}") from error
+            raise JudgeCancelled("the checker is shutting down")
 
         outcome = run_one_test(
             run_argv=compiled.run_argv,
             work_dir=work_dir,
-            paths=paths,
+            input_path=test.input_path,
             limits=limits,
             run_name=f"test-{test.ordinal:03d}",
         )
         max_cpu_ms = max(max_cpu_ms, outcome.cpu_ms)
         max_memory_kb = max(max_memory_kb, outcome.memory_kb)
 
-        verdict = outcome.verdict
-        message: str | None = None
-
-        if verdict == RUN_FINISHED:
-            correct, message = compare_output(
-                job, paths, outcome.stdout_path, checker_script=checker_script
+        if outcome.verdict == RUN_FINISHED:
+            if package.is_interactive:
+                judged = _judge_interactive_run(test, outcome)
+            else:
+                judged = _judge_ordinary_run(package, test, outcome)
+        elif outcome.verdict == TIME_LIMIT:
+            judged = _TestOutcome(verdict=TIME_LIMIT, message="time limit exceeded")
+        elif outcome.verdict == MEMORY_LIMIT:
+            judged = _TestOutcome(verdict=MEMORY_LIMIT, message="memory limit exceeded")
+        else:
+            judged = _TestOutcome(
+                verdict=RUNTIME_ERROR, message=_runtime_error_message(outcome)
             )
-            verdict = PASSED if correct else WRONG_ANSWER
-        elif verdict == TIME_LIMIT:
-            message = "time limit exceeded"
-        elif verdict == MEMORY_LIMIT:
-            message = "memory limit exceeded"
-        elif verdict == RUNTIME_ERROR:
-            detail = read_preview(outcome.stderr_path, 500).strip()
-            message = f"runtime error (exit code {outcome.exit_code})"
 
-            if outcome.signal_number:
-                message = f"runtime error (killed by signal {outcome.signal_number})"
-            if detail:
-                message = f"{message}: {detail}"
+        if judged.internal_error_message is not None:
+            # The grader said something nobody can act on, so nothing is judged at all.
+            return internal_error(clip(judged.internal_error_message), max_score=max_score)
 
-        passed = verdict == PASSED
+        passed = judged.verdict == PASSED
 
         if passed and test.is_hidden:
             score += test.points
         if not passed and first_failure is None:
-            first_failure = verdict
+            first_failure = judged.verdict
 
-        reports.append(
-            TestReport(
-                problem_test_id=test.problem_test_id,
+        rows.append(
+            TestResult(
                 ordinal=test.ordinal,
-                verdict=verdict,
+                name=test.name,
+                visibility=test.visibility,
+                verdict=judged.verdict,
                 passed=passed,
                 points_awarded=test.points if passed else 0.0,
                 # A hidden test never gives its content or the program's output back.
-                message=None if test.is_hidden else message,
+                message=None if test.is_hidden else judged.message,
                 actual_output=None if test.is_hidden else read_preview(outcome.stdout_path),
                 time_ms=outcome.cpu_ms,
                 memory_kb=outcome.memory_kb,
+                presses=judged.presses,
             )
         )
 
-    return FinalReport(
+    return JudgeResult(
         status=_submission_status(first_failure),
         score=score,
-        max_score=job.hidden_points,
+        max_score=max_score,
         compile_message=None,
         max_cpu_ms=max_cpu_ms,
         max_memory_kb=max_memory_kb,
-        tests=reports,
+        tests=rows,
     )
