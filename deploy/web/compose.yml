@@ -1,0 +1,60 @@
+# The Next.js app, plus the queue sweeper that runs from the same image.
+#
+# Production shape on purpose: the image is built or pulled, never a bind mount
+# of the git tree, and every setting arrives through an env file.
+# `deploy/compose.local.yml` layers development bind mounts on top of this.
+#
+# Postgres and Redis are not declared here. Locally the repository-root
+# `compose.yml` provides them; on a real machine they are provisioned
+# separately and DATABASE_URL / REDIS_URL point at them.
+
+services:
+  web:
+    image: ${WEB_IMAGE:-projekt-web:local}
+    build:
+      context: ../..
+      dockerfile: deploy/web/Dockerfile
+    container_name: projekt_web
+    restart: unless-stopped
+    env_file:
+      # Committed safe defaults, so a fresh clone starts with no setup.
+      - path: ./.env.example
+        required: true
+      # Real values and secrets. Gitignored, rendered by a deployment, wins.
+      - path: ./.env
+        required: false
+    ports:
+      # Only the host side is configurable; 3000 inside the container is fixed.
+      - '${WEB_PORT:-3210}:3000'
+    healthcheck:
+      # The image's own healthcheck asks whether the process is alive, which is
+      # the right question for "restart this container". Here the question is
+      # "may traffic and the checkers rely on it", so it asks readiness.
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:3000/api/ready']
+      interval: 5s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+  sweeper:
+    image: ${WEB_IMAGE:-projekt-web:local}
+    build:
+      context: ../..
+      dockerfile: deploy/web/Dockerfile
+    container_name: projekt_sweeper
+    restart: unless-stopped
+    # Straight to the script: no migrations, no seed, no HTTP server.
+    entrypoint: ['node']
+    command: ['/app/ops/sweeper.mjs']
+    env_file:
+      - path: ./.env.example
+        required: true
+      - path: ./.env
+        required: false
+    healthcheck:
+      # It serves nothing, so the only honest check is that the loop still exists.
+      test: ['CMD-SHELL', 'pgrep -f ops/sweeper.mjs > /dev/null || exit 1']
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 3

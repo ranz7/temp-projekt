@@ -1,0 +1,84 @@
+# The whole local stack in one command:
+#
+#   docker compose up -d --build
+#
+# Each deployable keeps its own compose file under `deploy/`, exactly the shape a
+# later Ansible pass renders one service at a time. This file only pulls those in
+# and adds what a real machine gets from somewhere else: the two backing stores
+# and the start-up order between them.
+#
+# Development bind mounts are deliberately not here. They live in
+# `deploy/compose.local.yml`:
+#
+#   docker compose -f compose.yml -f deploy/compose.local.yml up -d
+
+name: projekt
+
+include:
+  - path: deploy/web/compose.yml
+  - path: deploy/checker/compose.yml
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
+    container_name: projekt_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-projekt}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - projekt_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-projekt}']
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 10
+
+  redis:
+    image: ${REDIS_IMAGE:-redis:7.4-alpine}
+    container_name: projekt_redis
+    restart: unless-stopped
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      start_period: 5s
+      retries: 10
+
+  # The app applies migrations and seeds the problem packages before it serves,
+  # so it must not start until the database answers.
+  web:
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  sweeper:
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # The workers survive an app that is not up yet - they log it and retry - so
+  # they only wait for the container to exist, never for it to be healthy. That
+  # keeps `--scale` fast and keeps a restarting app from restarting the workers.
+  checker-bwrap:
+    depends_on:
+      web:
+        condition: service_started
+
+  checker-cpp:
+    depends_on:
+      web:
+        condition: service_started
+
+volumes:
+  projekt_pgdata:

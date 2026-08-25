@@ -1,0 +1,36 @@
+# Everything the build context does not need. Keeps the image small and, more
+# importantly, keeps secrets and reference clones out of any image layer.
+
+.git
+.gitignore
+.ai
+.agents
+.claude
+.cursorignore
+COLOR.png
+
+# Secrets never enter an image. `.env.example` files are the only ones shipped.
+.env
+.env.*
+!.env.example
+deploy/*/.env
+deploy/*/.env.*
+!deploy/*/.env.example
+
+node_modules
+.next
+out
+build
+dist
+coverage
+.vitest-cache
+*.tsbuildinfo
+next-env.d.ts
+*.log
+.DS_Store
+
+# The checker workers are their own images, built from `checkers/` only.
+checkers/**/__pycache__
+checkers/.venv
+
+evidence
