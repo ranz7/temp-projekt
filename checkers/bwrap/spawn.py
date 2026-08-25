@@ -8,6 +8,13 @@ job's own scratch directory as the single writable place, and clears the environ
 `JUDGE_SANDBOX=none` runs the program with no sandbox at all. That exists for
 developing on a machine without bubblewrap and is unsafe for anything but code you
 wrote yourself; the default is the sandbox.
+
+A run joins its cgroup itself, in the moment between being started and becoming the
+program: a one-line shell writes its own process id into the leaf and then becomes the
+command. Moving the process from outside afterwards is too late, because bubblewrap
+has already started the program by then and only processes started after the move
+inherit the leaf. That is what makes the measurement and the limits cover the program
+rather than the sandbox around it.
 """
 
 from __future__ import annotations
@@ -22,6 +29,12 @@ from typing import Sequence
 BOX = "/box"
 
 DEFAULT_BWRAP_PATH = "/usr/bin/bwrap"
+
+SHELL = "/bin/sh"
+
+# Write our own id into the leaf, then become the command, keeping the same id.
+JOIN_CGROUP_SCRIPT = 'printf %s "$$" > "$1" 2>/dev/null; shift; exec "$@"'
+JOIN_CGROUP_NAME = "oj-join-cgroup"
 
 # System trees the interpreter and the dynamic linker need, mounted read only.
 SYSTEM_READ_ONLY = ("/usr", "/lib", "/lib64", "/lib32", "/bin", "/sbin", "/etc/alternatives")
@@ -38,6 +51,8 @@ class SpawnSpec:
     stderr_path: Path | None = None
     extra_read_only: Sequence[Path] = field(default_factory=tuple)
     sandbox: str | None = None
+    # `<leaf>/cgroup.procs`: the run puts itself in that leaf before it starts.
+    cgroup_procs_path: Path | None = None
 
 
 def resolve_sandbox_mode(override: str | None = None) -> str:
@@ -158,6 +173,18 @@ def build_bwrap_argv(spec: SpawnSpec, *, executable: str | None = None) -> list[
     return argv
 
 
+def join_cgroup_argv(command: Sequence[str], cgroup_procs_path: Path) -> list[str]:
+    """Wrap a command so it joins the leaf before it becomes the program."""
+    return [
+        SHELL,
+        "-c",
+        JOIN_CGROUP_SCRIPT,
+        JOIN_CGROUP_NAME,
+        str(cgroup_procs_path),
+        *command,
+    ]
+
+
 def _open_stdio(spec: SpawnSpec):
     stdin = subprocess.DEVNULL
     stdout = subprocess.DEVNULL
@@ -195,6 +222,9 @@ def spawn_sandboxed(spec: SpawnSpec) -> subprocess.Popen:
     else:
         command = list(spec.run_argv)
         cwd = str(Path(spec.work_dir).resolve())
+
+    if spec.cgroup_procs_path is not None and Path(SHELL).exists():
+        command = join_cgroup_argv(command, spec.cgroup_procs_path)
 
     stdin, stdout, stderr, opened = _open_stdio(spec)
 

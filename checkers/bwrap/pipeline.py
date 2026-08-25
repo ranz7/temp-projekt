@@ -21,7 +21,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-from .cgroup import CgroupLeaf, add_process, create_leaf, kill_all, remove_leaf
+from .cgroup import (
+    CgroupLeaf,
+    add_process,
+    contains_process,
+    create_leaf,
+    kill_all,
+    procs_path,
+    remove_leaf,
+)
 from .compare import is_full_score, run_custom_checker, token_compare_files
 from .compile import compile_submission, submission_python_path
 from .limits import RunLimits
@@ -133,12 +141,14 @@ def run_one_test(
                 stdin_path=input_path,
                 stdout_path=stdout_path,
                 stderr_path=stderr_path,
+                # The run joins the leaf itself, before it starts the program.
+                cgroup_procs_path=procs_path(leaf) if leaf is not None else None,
             )
         )
 
-        if leaf is not None:
+        if leaf is not None and not contains_process(leaf, process.pid):
             try:
-                # Immediately after the spawn, so the limits cover the whole run.
+                # A machine whose shell could not do it: better late than never.
                 add_process(leaf, process.pid)
             except Exception as error:
                 logger.debug("Could not put the run in its cgroup: %s", error)

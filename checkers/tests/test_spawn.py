@@ -147,7 +147,9 @@ class RunInsideTheSandboxTests(unittest.TestCase):
             process = spawn_sandboxed(
                 SpawnSpec(
                     work_dir=work,
-                    run_argv=["/usr/bin/python3", str(source)],
+                    # The interpreter running the tests: an image need not have
+                    # one at /usr/bin/python3, and the run has to really start.
+                    run_argv=[sys.executable, str(source)],
                     stdout_path=produced,
                     sandbox="bwrap",
                 )

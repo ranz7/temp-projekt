@@ -3,9 +3,14 @@ Resource measurement for one sandboxed run.
 
 Ported from the reference judge (`outer/measure.py`).
 
-- CPU time is user plus system time from `wait4`.
+- CPU time comes from the run's cgroup when there is one, and from `wait4` otherwise.
+  The cgroup is the only source that is right under the sandbox: the program is a
+  grandchild of the process the judge waits for, and its CPU time never reaches
+  `wait4`, which reports a couple of milliseconds for a run that burned seconds.
 - Peak memory is `memory.peak` of the run's cgroup when there is one, and the
   process rusage otherwise.
+- A run the kernel killed for going over its memory shows up in `memory.events`. It
+  has to, because such a run is stopped at the limit and so never measures above it.
 """
 
 from __future__ import annotations
@@ -16,6 +21,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
+
+from .cgroup import read_cpu_usage_ms, read_oom_kills
 
 
 @dataclass(frozen=True)
@@ -52,6 +59,7 @@ def measure_process_group(
     start_monotonic: float,
     cgroup_path: str | None = None,
     killed_by_wall: bool = False,
+    killed_by_oom: bool = False,
     wall_fired: Callable[[], bool] | None = None,
 ) -> MeasureSample:
     """Wait for the run to end and report what it used."""
@@ -79,6 +87,15 @@ def measure_process_group(
         if peak is not None:
             memory_kb = peak
 
+        # The cgroup counts every process the run started, `wait4` only what it was
+        # handed back, so the larger of the two is the honest number.
+        cgroup_cpu_ms = read_cpu_usage_ms(cgroup_path)
+
+        if cgroup_cpu_ms is not None:
+            cpu_ms = max(cpu_ms, cgroup_cpu_ms)
+
+        killed_by_oom = killed_by_oom or read_oom_kills(cgroup_path) > 0
+
     if wall_fired is not None:
         try:
             killed_by_wall = bool(killed_by_wall or wall_fired())
@@ -92,4 +109,5 @@ def measure_process_group(
         exit_code=exit_code,
         signal_number=signal_number,
         killed_by_wall=killed_by_wall,
+        killed_by_oom=killed_by_oom,
     )

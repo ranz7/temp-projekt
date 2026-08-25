@@ -5,6 +5,12 @@ Ported from the reference judge (`outer/cgroup.py`). The leaf caps memory and th
 number of processes, and `cgroup.kill` stops a program that escaped its process group.
 When the cgroup tree is not writable the caller carries on without it: the run is
 still bounded by the wall-clock kill and measured through rusage.
+
+The leaf is also where a run is measured. A sandboxed program is a grandchild of the
+process the judge waits for, and the CPU time of that grandchild never reaches the
+judge through `wait4`, so `cpu.stat` here is the only honest source. It keeps counting
+for a run that was killed, and `memory.events` says whether the kernel killed the run
+for going over its memory.
 """
 
 from __future__ import annotations
@@ -16,6 +22,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 DEFAULT_CGROUP_ROOT = "/sys/fs/cgroup"
+
+# The file a process writes its own id into to join a leaf.
+CGROUP_PROCS = "cgroup.procs"
 
 # A fork bomb never gets more than this many processes.
 DEFAULT_PIDS_MAX = 128
@@ -106,9 +115,27 @@ def create_leaf(
     return CgroupLeaf(path=leaf_path, memory_max_bytes=memory_bytes, pids_max=processes)
 
 
+def procs_path(leaf: CgroupLeaf) -> Path:
+    """The file a process joins the leaf by writing its own id into."""
+    return Path(leaf.path) / CGROUP_PROCS
+
+
 def add_process(leaf: CgroupLeaf, pid: int) -> None:
-    """Move a process into the leaf, so its limits start counting."""
-    (Path(leaf.path) / "cgroup.procs").write_text(f"{int(pid)}\n", encoding="utf-8")
+    """Move a process into the leaf, so its limits start counting.
+
+    Only that one process moves: anything it had already started stays where it was,
+    which is why a run joins its leaf itself, before it starts anything.
+    """
+    procs_path(leaf).write_text(f"{int(pid)}\n", encoding="utf-8")
+
+
+def contains_process(leaf: CgroupLeaf, pid: int) -> bool:
+    """Whether that process is in the leaf right now."""
+    try:
+        listed = procs_path(leaf).read_text(encoding="utf-8").split()
+    except OSError:
+        return False
+    return str(int(pid)) in listed
 
 
 def kill_all(leaf: CgroupLeaf) -> None:
@@ -137,6 +164,46 @@ def kill_all(leaf: CgroupLeaf) -> None:
             os.kill(int(line), signal.SIGKILL)
         except (ValueError, ProcessLookupError, PermissionError):
             continue
+
+
+def read_cpu_usage_ms(path: Path | str) -> int | None:
+    """The CPU time everything in the cgroup used, in milliseconds.
+
+    This is what a run really spent, whether it ended by itself or was killed, and it
+    covers every process it started.
+    """
+    try:
+        raw = (Path(path) / "cpu.stat").read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    for line in raw.splitlines():
+        key, _, value = line.strip().partition(" ")
+
+        if key == "usage_usec":
+            try:
+                return int(value.strip()) // 1000
+            except ValueError:
+                return None
+    return None
+
+
+def read_oom_kills(path: Path | str) -> int:
+    """How many processes the kernel killed here for going over the memory limit."""
+    try:
+        raw = (Path(path) / "memory.events").read_text(encoding="utf-8")
+    except OSError:
+        return 0
+
+    for line in raw.splitlines():
+        key, _, value = line.strip().partition(" ")
+
+        if key == "oom_kill":
+            try:
+                return int(value.strip())
+            except ValueError:
+                return 0
+    return 0
 
 
 def memory_peak_kb(leaf: CgroupLeaf) -> int | None:
