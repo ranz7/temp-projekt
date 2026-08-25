@@ -1,6 +1,5 @@
 import { db } from '@backend/database/db'
 import { account__user_ } from '@backend/modules/account/schema'
-import { closeSubmissionQueue } from '@backend/modules/submission/internal-functions/queue'
 import { sweepSubmissions } from '@backend/modules/submission/internal-functions/sweeper'
 import { submission__submission_ } from '@backend/modules/submission/schema'
 import { task__problem_ } from '@backend/modules/task/schema'
@@ -19,7 +18,6 @@ type QueuedRow = {
   attempts?: number
   leaseExpiresAt?: Date | null
   claimId?: string | null
-  queuePublishedAt?: Date | null
 }
 
 async function insertSubmission(row: QueuedRow): Promise<string> {
@@ -33,8 +31,7 @@ async function insertSubmission(row: QueuedRow): Promise<string> {
       status_: row.status,
       judge_attempts_: row.attempts ?? 0,
       lease_expires_at_: row.leaseExpiresAt ?? null,
-      judge_claim_id_: row.claimId ?? null,
-      queue_published_at_: row.queuePublishedAt ?? null
+      judge_claim_id_: row.claimId ?? null
     })
     .returning({ id: submission__submission_.id })
 
@@ -56,9 +53,6 @@ function minutesAgo(minutes: number): Date {
 
 beforeAll(async () => {
   process.env.SUBMISSION_MAX_ATTEMPTS = '3'
-  process.env.SUBMISSION_QUEUE_REPOST_SECONDS = '10'
-  // Nothing listens here, so every wake-up fails - the outage the sweep must survive.
-  process.env.REDIS_URL = 'redis://127.0.0.1:6399'
 
   await db.delete(task__problem_).where(eq(task__problem_.slug_, slug))
   await db.delete(account__user_).where(like(account__user_.username_, `${username}%`))
@@ -97,11 +91,10 @@ afterAll(async () => {
   await db.delete(submission__submission_).where(sql`true`)
   await db.delete(task__problem_).where(eq(task__problem_.slug_, slug))
   await db.delete(account__user_).where(like(account__user_.username_, `${username}%`))
-  closeSubmissionQueue()
 })
 
 describe('sweepSubmissions', () => {
-  it('queues a submission again when its checker went quiet', async () => {
+  it('queues a submission again when its machine went quiet', async () => {
     const submissionId = await insertSubmission({
       status: 'running',
       attempts: 1,
@@ -119,7 +112,9 @@ describe('sweepSubmissions', () => {
     expect(row.status_).toBe('queued')
     expect(row.judge_claim_id_).toBeNull()
     expect(row.lease_expires_at_).toBeNull()
-    // The attempt stays spent - three quiet checkers still end the submission.
+    expect(row.machine_id_).toBeNull()
+    expect(row.checker_job_id_).toBeNull()
+    // The attempt stays spent - three quiet machines still end the submission.
     expect(row.judge_attempts_).toBe(1)
   })
 
@@ -144,7 +139,7 @@ describe('sweepSubmissions', () => {
     expect(row.lease_expires_at_).toBeNull()
   })
 
-  it('leaves a checker that is still within its lease alone', async () => {
+  it('leaves a machine that is still within its lease alone', async () => {
     const submissionId = await insertSubmission({
       status: 'running',
       attempts: 1,
@@ -159,17 +154,22 @@ describe('sweepSubmissions', () => {
     expect((await readSubmission(submissionId)).status_).toBe('running')
   })
 
-  it('survives a wake-up channel that is down and keeps the submission waiting', async () => {
-    const submissionId = await insertSubmission({ status: 'queued', queuePublishedAt: null })
+  it('leaves a waiting submission waiting', async () => {
+    const submissionId = await insertSubmission({ status: 'queued' })
 
     const report = await sweepSubmissions()
 
-    expect(report.republished).toBe(0)
+    expect(report.requeued).toBe(0)
+    expect(report.failed).toBe(0)
+    expect((await readSubmission(submissionId)).status_).toBe('queued')
+  })
 
-    const row = await readSubmission(submissionId)
+  it('ends a waiting submission nobody could ever judge again', async () => {
+    const submissionId = await insertSubmission({ status: 'queued', attempts: 3 })
 
-    expect(row.status_).toBe('queued')
-    // Still unannounced, so the next sweep tries again.
-    expect(row.queue_published_at_).toBeNull()
+    const report = await sweepSubmissions()
+
+    expect(report.failed).toBe(1)
+    expect((await readSubmission(submissionId)).status_).toBe('internal_error')
   })
 })
