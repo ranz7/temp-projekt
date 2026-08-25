@@ -8,6 +8,10 @@
 # execs the server; both steps are safe to repeat. The image is tagged with the
 # commit, so a re-run of the same commit builds nothing and leaves the running
 # container - and whatever it is judging - alone.
+#
+# The same image also runs the loop runner, which is the process that actually
+# hands submissions to the machines. A run that leaves it down has deployed a
+# site where nothing is ever judged, so it fails here rather than looking fine.
 
 - name: Look for the web image of this commit
   ansible.builtin.command:
@@ -69,3 +73,25 @@
   delay: 5
   until: oj_web_health.stdout == 'healthy'
   changed_when: false
+
+- name: Wait until the loop runner is handing out work
+  ansible.builtin.command:
+    argv:
+      - docker
+      - inspect
+      - --format
+      - "{% raw %}{{.State.Health.Status}}{% endraw %}"
+      - "{{ oj_loop_runner_container }}"
+  register: oj_loop_runner_health
+  retries: 30
+  delay: 5
+  until: oj_loop_runner_health.stdout == 'healthy'
+  changed_when: false
+
+- name: Refuse a deployment whose loop runner is not running
+  ansible.builtin.assert:
+    that:
+      - oj_loop_runner_health.stdout == 'healthy'
+    fail_msg: >-
+      {{ oj_loop_runner_container }} is not running, so submissions would be
+      taken and never judged. `docker logs {{ oj_loop_runner_container }}` says why.

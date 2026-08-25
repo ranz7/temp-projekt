@@ -12,6 +12,9 @@ oj_tunnels_network: oj-tunnels    # app to the tunnels; the tunnels need SSH out
 # so it never needs host networking and never learns a host address.
 oj_postgres_container: online-judge-postgres
 oj_web_container: online-judge-web
+# The loop runner: the same image as the app, running the loop that hands
+# submissions to the machines and writes back what they answer.
+oj_loop_runner_container: online-judge-loop-runner
 oj_tunnels_container: online-judge-tunnels
 oj_proxy_container: online-judge-proxy
 

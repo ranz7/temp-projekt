@@ -43,6 +43,7 @@ The application machine, all in Docker, nothing but the proxy publishing a port:
 
 - **Postgres 17**, on an internal network, no published port at all.
 - **The app**, which applies migrations and seeds the four problems before it serves.
+- **The loop runner**, the same image running the loop that hands waiting submissions to the machines and writes back what they answer. Without it submissions are taken and never judged, so the deployment fails rather than finishing quietly.
 - **The proxy**, which obtains and renews a certificate for `OJ_DOMAIN` by itself. With no domain it serves the site over plain HTTP on port 80; adding the domain later is that line in `deploy.env` and `make deploy` again.
 - **The tunnels**, one container holding a permanent SSH connection to every checker.
 
