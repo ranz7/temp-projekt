@@ -15,6 +15,10 @@ command. Moving the process from outside afterwards is too late, because bubblew
 has already started the program by then and only processes started after the move
 inherit the leaf. That is what makes the measurement and the limits cover the program
 rather than the sandbox around it.
+
+The whole run is one process group, so it can be killed as one and, just as
+importantly, waited for as one: bubblewrap starts a helper of its own that would
+otherwise be left behind unwaited for after every single test.
 """
 
 from __future__ import annotations
@@ -29,6 +33,9 @@ from typing import Sequence
 BOX = "/box"
 
 DEFAULT_BWRAP_PATH = "/usr/bin/bwrap"
+
+# What bubblewrap puts in front of its own complaints, before the program starts.
+BWRAP_MESSAGE_PREFIX = "bwrap: "
 
 SHELL = "/bin/sh"
 
@@ -122,7 +129,10 @@ def build_bwrap_argv(spec: SpawnSpec, *, executable: str | None = None) -> list[
         "--unshare-ipc",
         "--unshare-uts",
         "--die-with-parent",
-        "--new-session",
+        # Deliberately no `--new-session`: the run is already in a session of its own
+        # with no terminal attached (see `spawn_sandboxed`), so that flag guards
+        # against nothing here, and it would put bubblewrap's own helper in a second
+        # process group where this judge can neither kill nor wait for it.
         "--tmpfs",
         "/tmp",
         "--proc",
@@ -185,6 +195,28 @@ def join_cgroup_argv(command: Sequence[str], cgroup_procs_path: Path) -> list[st
     ]
 
 
+def sandbox_failure_message(stderr_text: str) -> str | None:
+    """What bubblewrap said when it could not start, or nothing when it is not that.
+
+    A sandbox that will not start is this machine's fault and never the person's, so
+    it has to be told apart from a program of theirs that crashed. Bubblewrap says so
+    itself, on its own error output, before the program has run at all: `bwrap: Can't
+    fork for pid 1: Resource temporarily unavailable` when the machine is out of
+    processes, and the same shape of line for a mount or a namespace it could not set
+    up.
+    """
+    for line in (stderr_text or "").splitlines():
+        stripped = line.strip()
+
+        if not stripped:
+            continue
+        if stripped.startswith(BWRAP_MESSAGE_PREFIX):
+            return stripped[len(BWRAP_MESSAGE_PREFIX) :].strip() or stripped
+        # Only the first thing said counts: after this the program's own output starts.
+        return None
+    return None
+
+
 def _open_stdio(spec: SpawnSpec):
     stdin = subprocess.DEVNULL
     stdout = subprocess.DEVNULL
@@ -229,6 +261,9 @@ def spawn_sandboxed(spec: SpawnSpec) -> subprocess.Popen:
     stdin, stdout, stderr, opened = _open_stdio(spec)
 
     try:
+        # `start_new_session` puts the run in a session and a process group of its own,
+        # with no controlling terminal. Every process the run starts stays in that
+        # group, so the group is what gets killed and what gets waited for.
         return subprocess.Popen(
             command,
             stdin=stdin,

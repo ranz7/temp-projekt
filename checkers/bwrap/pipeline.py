@@ -14,6 +14,8 @@ verdict is whatever that grader printed.
 from __future__ import annotations
 
 import logging
+import os
+import signal
 import sys
 import threading
 import time
@@ -33,7 +35,7 @@ from .cgroup import (
 from .compare import is_full_score, run_custom_checker, token_compare_files
 from .compile import compile_submission, submission_python_path
 from .limits import RunLimits
-from .measure import measure_process_group
+from .measure import measure_process_group, reap_process_group
 from .package import CUSTOM_CHECKER, PackageTest, ProblemPackage, load_package
 from .report import (
     ACCEPTED,
@@ -49,7 +51,12 @@ from .report import (
     compilation_error,
     internal_error,
 )
-from .spawn import SpawnSpec, spawn_sandboxed
+from .spawn import (
+    SpawnSpec,
+    resolve_sandbox_mode,
+    sandbox_failure_message,
+    spawn_sandboxed,
+)
 from .verdict import (
     GRADER_SILENT,
     GRADER_UNRECOGNISED,
@@ -94,6 +101,13 @@ def read_tail(path: Path, limit: int = GRADER_TAIL_LIMIT) -> str:
     return raw.decode("utf-8", errors="replace")
 
 
+def read_sandbox_failure(stderr_path: Path) -> str | None:
+    """What the sandbox said when it could not start, if that is what happened."""
+    if resolve_sandbox_mode() != "bwrap":
+        return None
+    return sandbox_failure_message(read_preview(stderr_path, 500))
+
+
 def _open_cgroup(name: str, limits: RunLimits) -> CgroupLeaf | None:
     """A leaf for this run, or nothing when the cgroup tree is not writable."""
     try:
@@ -114,6 +128,8 @@ class RunOutcome:
     signal_number: int | None
     stdout_path: Path
     stderr_path: Path
+    # Set when the sandbox itself could not start, which is never the person's fault.
+    sandbox_message: str | None = None
 
 
 def run_one_test(
@@ -185,21 +201,25 @@ def run_one_test(
             signal_number=sample.signal_number,
             stdout_path=stdout_path,
             stderr_path=stderr_path,
+            sandbox_message=read_sandbox_failure(stderr_path),
         )
     finally:
         watchdog.cancel()
 
-        if process is not None and process.poll() is None:
-            try:
-                import os
-                import signal as signal_module
-
-                os.killpg(process.pid, signal_module.SIGKILL)
-            except Exception:
+        if process is not None:
+            if process.poll() is None:
                 try:
-                    process.kill()
+                    os.killpg(process.pid, signal.SIGKILL)
                 except Exception:
-                    pass
+                    try:
+                        process.kill()
+                    except Exception:
+                        pass
+
+            # However the run ended, wait for everything it started. The sandbox
+            # leaves a helper of its own behind, and one of those per test fills a
+            # machine's process table until no sandbox can start at all.
+            reap_process_group(process.pid)
 
         if leaf is not None:
             try:
@@ -340,6 +360,14 @@ def judge_submission(
             limits=limits,
             run_name=f"test-{test.ordinal:03d}",
         )
+        if outcome.sandbox_message is not None:
+            # This machine could not start the sandbox. Nothing about that is the
+            # person's doing, so their solution is not given a verdict for it.
+            return internal_error(
+                clip(f"the sandbox could not start on this checker: {outcome.sandbox_message}"),
+                max_score=max_score,
+            )
+
         max_cpu_ms = max(max_cpu_ms, outcome.cpu_ms)
         max_memory_kb = max(max_memory_kb, outcome.memory_kb)
 
