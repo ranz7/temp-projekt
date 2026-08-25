@@ -36,6 +36,7 @@ from .compare import is_full_score, run_custom_checker, token_compare_files
 from .compile import compile_submission, submission_python_path
 from .limits import RunLimits
 from .measure import measure_process_group, reap_process_group
+from .orphans import claim_run, release_run, starting_a_run
 from .package import CUSTOM_CHECKER, PackageTest, ProblemPackage, load_package
 from .report import (
     ACCEPTED,
@@ -150,17 +151,22 @@ def run_one_test(
 
     try:
         started = time.monotonic()
-        process = spawn_sandboxed(
-            SpawnSpec(
-                work_dir=Path(work_dir),
-                run_argv=list(run_argv),
-                stdin_path=input_path,
-                stdout_path=stdout_path,
-                stderr_path=stderr_path,
-                # The run joins the leaf itself, before it starts the program.
-                cgroup_procs_path=procs_path(leaf) if leaf is not None else None,
+
+        # The run's group is written down before anything else can look at it, so the
+        # sweeper that waits for orphans never takes a process this run is waiting for.
+        with starting_a_run():
+            process = spawn_sandboxed(
+                SpawnSpec(
+                    work_dir=Path(work_dir),
+                    run_argv=list(run_argv),
+                    stdin_path=input_path,
+                    stdout_path=stdout_path,
+                    stderr_path=stderr_path,
+                    # The run joins the leaf itself, before it starts the program.
+                    cgroup_procs_path=procs_path(leaf) if leaf is not None else None,
+                )
             )
-        )
+            claim_run(process.pid)
 
         if leaf is not None and not contains_process(leaf, process.pid):
             try:
@@ -220,6 +226,7 @@ def run_one_test(
             # leaves a helper of its own behind, and one of those per test fills a
             # machine's process table until no sandbox can start at all.
             reap_process_group(process.pid)
+            release_run(process.pid)
 
         if leaf is not None:
             try:
