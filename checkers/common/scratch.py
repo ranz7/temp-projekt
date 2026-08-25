@@ -1,13 +1,10 @@
 """
 Per-job scratch directories.
 
-A worker keeps nothing between jobs: everything one submission needs lives under
-`CHECKER_SCRATCH_PATH/<worker>/<submissionId>` and goes away when the job ends,
-whether it was judged, failed or given back.
-
-The directory is named after the submission rather than the claim, so a worker that
-was restarted mid-job finds what its previous life left behind. Only the C++ worker
-uses that, to avoid sending the same source to OIOIOI twice.
+A checker machine keeps nothing between jobs: everything one submission needs lives
+under `CHECKER_SCRATCH_PATH/<jobId>` and goes away when the job ends, whether it was
+judged or blew up. The whole root is emptied at start-up and again at shutdown, so a
+crash leaves nothing behind either.
 """
 
 from __future__ import annotations
@@ -30,22 +27,25 @@ class ScratchDirectory:
         shutil.rmtree(self.path, ignore_errors=True)
 
 
-def open_scratch(
-    root: Path, worker_name: str, submission_id: str, *, reuse: bool
-) -> ScratchDirectory:
-    """Create the job's directory. `reuse=False` wipes whatever a crash left there."""
-    safe = "".join(
-        character for character in submission_id if character.isalnum() or character in "-_"
+def safe_name(name: str) -> str:
+    """A directory name that cannot escape the scratch root."""
+    cleaned = "".join(
+        character for character in name if character.isalnum() or character in "-_"
     )
-    path = Path(root) / worker_name / (safe or "job")
+    return cleaned or "job"
 
-    if path.exists() and not reuse:
+
+def open_scratch(root: Path, job_id: str) -> ScratchDirectory:
+    """Create the job's own empty directory, wiping whatever was there."""
+    path = Path(root) / safe_name(job_id)
+
+    if path.exists():
         shutil.rmtree(path, ignore_errors=True)
 
     path.mkdir(parents=True, exist_ok=True)
     return ScratchDirectory(path=path)
 
 
-def clear_scratch_root(root: Path, worker_name: str) -> None:
+def clear_scratch_root(root: Path) -> None:
     """Drop every leftover directory. Used at start-up and at shutdown."""
-    shutil.rmtree(Path(root) / worker_name, ignore_errors=True)
+    shutil.rmtree(Path(root), ignore_errors=True)

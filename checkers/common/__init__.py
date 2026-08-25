@@ -1,1 +1,1 @@
-"""Shared building blocks of both checker workers."""
+"""The checker service: its contract, its configuration and its HTTP routes."""
