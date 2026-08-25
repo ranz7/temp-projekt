@@ -116,8 +116,13 @@ class Worker:
                 max_score=job.hidden_points,
             )
 
-    def handle_job(self, job: Job) -> None:
-        """Report progress, judge, answer. Never raises for a judging failure."""
+    def handle_job(self, job: Job) -> bool:
+        """Report progress, judge, answer. Never raises for a judging failure.
+
+        Returns whether the submission was actually judged. A job given back to the
+        queue answers False, so the loop waits before it claims again instead of
+        taking the same waiting submission over and over.
+        """
         logger.info(
             "Judging submission %s (%s, %s).", job.submission_id, job.problem_slug, job.language
         )
@@ -148,7 +153,8 @@ class Worker:
                     outcome.reason,
                 )
                 self.client.release(job.submission_id, job.claim_id, clip(outcome.reason, 500))
-                return
+
+                return False
 
             logger.info(
                 "Submission %s is %s (%s of %s points).",
@@ -158,10 +164,14 @@ class Worker:
                 outcome.max_score,
             )
             self.client.report_result(job.submission_id, job.claim_id, outcome)
+
+            return True
         except (AppUnreachableError, ContractError) as error:
             # The app is the only place a result can go. Losing it means the lease
             # runs out and the submission is handed to somebody else.
             logger.error("Could not report on submission %s: %s", job.submission_id, error)
+
+            return False
         finally:
             if not keep_scratch:
                 scratch.remove()
@@ -169,7 +179,11 @@ class Worker:
     # -- the loop ---------------------------------------------------------------
 
     def run_once(self) -> bool:
-        """Claim and handle at most one job. Returns whether there was work."""
+        """Claim and handle at most one job.
+
+        Returns whether the worker may claim again straight away. Nothing to do and a
+        job handed back both answer False, so the caller waits either way.
+        """
         try:
             job = self.client.claim(self.config.worker_id, self.judge.languages)
         except AppUnreachableError as error:
@@ -184,8 +198,7 @@ class Worker:
         if job is None:
             return False
 
-        self.handle_job(job)
-        return True
+        return self.handle_job(job)
 
     def run(self) -> int:
         """Run until a signal stops the worker. Returns the process exit code."""
@@ -206,7 +219,9 @@ class Worker:
             while not self.stop.is_set():
                 if self.run_once():
                     # A worker that just judged something keeps draining before it
-                    # goes back to waiting on the stream.
+                    # goes back to waiting on the stream. A submission it could not
+                    # judge waits instead, so an outage does not turn into a worker
+                    # and an app burning through claims for a job nobody can take.
                     continue
                 if self.stop.is_set():
                     break

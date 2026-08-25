@@ -59,6 +59,38 @@ class FakeListener:
         return None
 
 
+class StoppingListener:
+    """Records every wait, and stops the worker on the first one.
+
+    Waiting is what the loop does when there is nothing to take, so a test can watch
+    for it instead of sleeping.
+    """
+
+    def __init__(self, stop: threading.Event) -> None:
+        self.stop = stop
+        self.waits: list[float] = []
+
+    def wait(self, timeout_seconds: float) -> bool:
+        self.waits.append(timeout_seconds)
+        self.stop.set()
+        return False
+
+    def close(self) -> None:
+        return None
+
+
+class FakeHealth:
+    def __init__(self) -> None:
+        self.started = False
+        self.stopped = False
+
+    def start(self) -> None:
+        self.started = True
+
+    def stop(self) -> None:
+        self.stopped = True
+
+
 class RecordingJudge:
     name = "fake"
     languages = ["python"]
@@ -168,6 +200,55 @@ class WorkerLoopTests(unittest.TestCase):
 
         self.assertFalse(worker.run_once())
         self.assertEqual(client.claims, 1)
+
+    def test_a_released_job_counts_as_nothing_to_do(self) -> None:
+        client = FakeClient([make_job(language="cpp")])
+        judge = RecordingJudge(Release("C++ checking is temporarily unavailable"))
+        worker = self._worker(judge, client)
+
+        # False is what the loop reads as "wait before claiming again".
+        self.assertFalse(worker.run_once())
+
+    def test_a_judged_job_lets_the_worker_carry_straight_on(self) -> None:
+        client = FakeClient([make_job()])
+        worker = self._worker(RecordingJudge(FinalReport(status="accepted")), client)
+
+        self.assertTrue(worker.run_once())
+
+    def test_the_loop_waits_after_a_release_instead_of_claiming_again(self) -> None:
+        """A submission nobody can judge must not be claimed over and over."""
+        job = make_job(language="cpp")
+        client = FakeClient([job])
+        judge = RecordingJudge(Release("OIOIOI is not configured"))
+        worker = Worker(
+            self.config, judge, client=client, listener=FakeListener(), health=FakeHealth()
+        )
+        listener = StoppingListener(worker.stop)
+        worker.listener = listener
+
+        self.assertEqual(worker.run(), 0)
+
+        self.assertEqual(len(client.releases), 1)
+        self.assertEqual(client.results, [])
+        # One claim, then the poll delay. The old loop claimed again immediately.
+        self.assertEqual(client.claims, 1)
+        self.assertEqual(listener.waits, [self.config.poll_seconds])
+
+    def test_the_loop_keeps_draining_after_a_judged_submission(self) -> None:
+        client = FakeClient([make_job(), make_job()])
+        judge = RecordingJudge(FinalReport(status="accepted"))
+        worker = Worker(
+            self.config, judge, client=client, listener=FakeListener(), health=FakeHealth()
+        )
+        listener = StoppingListener(worker.stop)
+        worker.listener = listener
+
+        worker.run()
+
+        # Both submissions, then an empty claim, and only then the wait.
+        self.assertEqual(len(client.results), 2)
+        self.assertEqual(client.claims, 3)
+        self.assertEqual(listener.waits, [self.config.poll_seconds])
 
     def test_the_judge_is_told_when_the_worker_stops(self) -> None:
         judge = RecordingJudge(FinalReport(status="accepted"))
