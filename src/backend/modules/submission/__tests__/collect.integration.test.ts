@@ -360,4 +360,59 @@ describe('collectSubmissionResults', () => {
     expect(row.judge_message_?.length ?? 0).toBeGreaterThan(0)
     expect(row.machine_id_).toBeNull()
   })
+
+  it('still collects the result from a machine disabled after it took the work', async () => {
+    const { submissionId } = await running()
+
+    // Disabling stops new work, but this submission is already running there - the
+    // spec says whatever it is already judging is allowed to finish.
+    await db
+      .update(machine__machine_)
+      .set({ enabled_: false })
+      .where(eq(machine__machine_.id, firstMachineId))
+
+    const machine = fleet.get(FIRST_PORT)
+
+    if (machine === undefined) throw new Error('Expected a fake machine.')
+
+    machine.job = {
+      kind: 'done',
+      result: fakeResult({ status: 'accepted', score: 2, maxScore: 2, tests: passedTests })
+    }
+
+    const report = await collectSubmissionResults()
+
+    expect(report.finished).toBe(1)
+
+    const row = await readSubmission(submissionId)
+
+    expect(row.status_).toBe('accepted')
+    expect(row.score_).toBe(2)
+  })
+
+  it('treats an answer from a machine speaking an old contract version as lost, not read', async () => {
+    const { submissionId } = await running()
+    const machine = fleet.get(FIRST_PORT)
+
+    if (machine === undefined) throw new Error('Expected a fake machine.')
+
+    // A machine upgraded mid-flight, or not yet upgraded, cannot make the app read a
+    // result shaped for a contract the app no longer - or does not yet - speak.
+    machine.job = {
+      kind: 'done',
+      result: fakeResult({ status: 'accepted', score: 1, maxScore: 1 })
+    }
+    machine.contractVersionOverride = 1
+
+    const report = await collectSubmissionResults()
+
+    expect(report.requeued).toBe(1)
+
+    const row = await readSubmission(submissionId)
+
+    expect(row.status_).toBe('queued')
+    expect(row.machine_id_).toBeNull()
+    // The attempt stays spent - the submission is judged again by another machine.
+    expect(row.judge_attempts_).toBe(1)
+  })
 })

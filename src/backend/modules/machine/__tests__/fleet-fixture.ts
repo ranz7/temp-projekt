@@ -44,6 +44,11 @@ export type FakeMachine = {
   job: FakeJob
   /** Every submission it was asked to judge, in order. */
   judged: string[]
+  /**
+   * When set, every `/judge/<id>` answer claims this contract version instead of the
+   * real one - a machine mid-upgrade, or not upgraded yet, speaking an old shape.
+   */
+  contractVersionOverride?: number
 }
 
 const HEALTHY: FakeHealth = { ok: true, busy: 0, capacity: 2, problems: [], version: 'itest' }
@@ -142,14 +147,16 @@ export function installFakeFleet(fleet: Map<number, FakeMachine>): void {
       }
     }
 
+    const contractVersion = machine.contractVersionOverride ?? CHECKER_CONTRACT_VERSION
+
     if (machine.job.kind === 'running') {
-      return { status: 200, body: { contractVersion: CHECKER_CONTRACT_VERSION, status: 'running' } }
+      return { status: 200, body: { contractVersion, status: 'running' } }
     }
 
     return {
       status: 200,
       body: {
-        contractVersion: CHECKER_CONTRACT_VERSION,
+        contractVersion,
         status: 'done',
         result: machine.job.result
       }
