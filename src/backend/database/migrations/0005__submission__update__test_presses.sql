@@ -1,0 +1,1 @@
+ALTER TABLE "submission__test_result_" ADD COLUMN "presses_" integer;

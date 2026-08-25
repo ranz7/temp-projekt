@@ -43,13 +43,20 @@ describe('checker contract', () => {
     expect(health.success).toBe(true)
   })
 
-  it('reads a finished job and drops what it does not name', () => {
-    const parsed = CheckerJobStatusDTOZ.safeParse(doneJob)
+  it('reads a finished job, keeps the press count and drops the file name', () => {
+    const parsed = CheckerJobStatusDTOZ.safeParse({
+      ...doneJob,
+      result: {
+        ...doneJob.result,
+        tests: [{ ...doneJob.result.tests[0], presses: 7 }]
+      }
+    })
 
     expect(parsed.success).toBe(true)
 
     if (!parsed.success || parsed.data.status !== 'done') throw new Error('Expected a done job.')
 
+    expect(parsed.data.result.tests[0].presses).toBe(7)
     expect(Object.keys(parsed.data.result.tests[0]).sort()).toEqual([
       'actualOutput',
       'memoryKb',
@@ -57,10 +64,21 @@ describe('checker contract', () => {
       'ordinal',
       'passed',
       'pointsAwarded',
+      'presses',
       'timeMs',
       'verdict',
       'visibility'
     ])
+  })
+
+  it('reads a test of an ordinary problem, which counts no presses', () => {
+    const parsed = CheckerJobStatusDTOZ.safeParse(doneJob)
+
+    expect(parsed.success).toBe(true)
+
+    if (!parsed.success || parsed.data.status !== 'done') throw new Error('Expected a done job.')
+
+    expect(parsed.data.result.tests[0].presses).toBeNull()
   })
 
   it('reads a job that is still running', () => {

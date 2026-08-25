@@ -112,7 +112,10 @@ export const submission__test_result_ = pgTable(
     message_: text(),
     actual_output_: text(),
     time_ms_: integer(),
-    memory_kb_: integer()
+    memory_kb_: integer(),
+    // How many button presses an interactive problem's grader counted. Null for every
+    // ordinary problem, where nothing presses anything.
+    presses_: integer()
   },
   table => [
     foreignKey({

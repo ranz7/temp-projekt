@@ -56,8 +56,11 @@ export const CheckerFinalStatusDTOZ = z.enum([
 
 /**
  * One test the machine ran. It carries no database id: the app matches a row to its
- * own test by `ordinal` within the same `visibility`. Anything else the machine adds
- * (a file name, an interactive problem's press count) is dropped here.
+ * own test by `ordinal` within the same `visibility`.
+ *
+ * The machine also reports `name`, the test file's stem. It is dropped on purpose: a
+ * person reading the page counts tests, and a hidden test's file name tells them
+ * nothing they can act on.
  */
 export const CheckerTestResultDTOZ = z.object({
   ordinal: z.number().int().positive(),
@@ -68,7 +71,12 @@ export const CheckerTestResultDTOZ = z.object({
   message: z.string().nullish(),
   actualOutput: z.string().nullish(),
   timeMs: z.number().int().nonnegative(),
-  memoryKb: z.number().int().nonnegative()
+  memoryKb: z.number().int().nonnegative(),
+  /**
+   * How many button presses an interactive problem's grader counted, which is what the
+   * original competition rewarded. Null everywhere else.
+   */
+  presses: z.number().int().nonnegative().nullish()
 })
 
 export const CheckerFinalResultDTOZ = z.object({

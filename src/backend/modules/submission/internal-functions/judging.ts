@@ -229,7 +229,8 @@ export async function applyCheckerResult(
           message_: test.message ?? null,
           actual_output_: test.actualOutput ?? null,
           time_ms_: test.timeMs,
-          memory_kb_: test.memoryKb
+          memory_kb_: test.memoryKb,
+          presses_: test.presses ?? null
         }
       ]
     })

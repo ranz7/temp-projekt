@@ -36,6 +36,13 @@
       "when": 1787688411226,
       "tag": "0004__judge__update__machine_registry",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787689581675,
+      "tag": "0005__submission__update__test_presses",
+      "breakpoints": true
     }
   ]
 }

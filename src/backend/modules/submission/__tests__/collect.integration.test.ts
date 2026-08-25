@@ -150,6 +150,56 @@ describe('collectSubmissionResults', () => {
     expect(judged.total).toBe(1)
   })
 
+  it('stores the press counts an interactive problem reported', async () => {
+    const { submissionId } = await running()
+    const machine = fleet.get(FIRST_PORT)
+
+    if (machine === undefined) throw new Error('Expected a fake machine.')
+
+    machine.job = {
+      kind: 'done',
+      result: fakeResult({
+        status: 'accepted',
+        score: 2,
+        maxScore: 2,
+        tests: [
+          fakeTest({ ordinal: 1, visibility: 'public', pointsAwarded: 0, presses: 4 }),
+          fakeTest({ ordinal: 1, visibility: 'hidden', presses: 7 }),
+          fakeTest({ ordinal: 2, visibility: 'hidden', presses: 11 })
+        ]
+      })
+    }
+
+    await collectSubmissionResults()
+
+    const results = await readTestResults(submissionId)
+    const hidden = results
+      .filter(test => test.visibility_ === 'hidden')
+      .sort((left, right) => left.ordinal_ - right.ordinal_)
+
+    expect(results.filter(test => test.visibility_ === 'public')[0].presses_).toBe(4)
+    expect(hidden.map(test => test.presses_)).toEqual([7, 11])
+  })
+
+  it('leaves the press count empty for an ordinary problem', async () => {
+    const { submissionId } = await running()
+    const machine = fleet.get(FIRST_PORT)
+
+    if (machine === undefined) throw new Error('Expected a fake machine.')
+
+    machine.job = {
+      kind: 'done',
+      result: fakeResult({ status: 'accepted', score: 2, maxScore: 2, tests: passedTests })
+    }
+
+    await collectSubmissionResults()
+
+    const results = await readTestResults(submissionId)
+
+    expect(results).toHaveLength(3)
+    expect(results.every(test => test.presses_ === null)).toBe(true)
+  })
+
   it('leaves a submission running while its machine is still judging', async () => {
     const { submissionId } = await running()
 
