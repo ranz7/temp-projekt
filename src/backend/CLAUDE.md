@@ -26,11 +26,11 @@ Procedure naming: kebab-case directory + verb-noun. Router keys drop noisy suffi
 ## Database
 
 - Schema barrel: `src/backend/database/schema.ts` re-exports each module's `schema.ts`.
-- Table names: `<module>__<noun>_` (trailing underscore). Every identifier ends with `_` except the `note__note_.id` PK, which the skeleton spec locked as `id`.
+- Table names: `<module>__<noun>_` (trailing underscore). Every column ends with `_`; primary keys are `id` without trailing underscore.
 - Primary keys: UUIDv7 via `uuid().default(uuidv7)` (`uuidv7` from `database/sql-functions.ts` → `uuid_generate_v7()`, created by migration `0000__uuid_v7.sql`).
-- **Never invent entity ids** — omit the PK on insert.
+- **Never invent entity ids** - omit the PK on insert.
 - **Every `db.delete()` and `db.update()` MUST have `.where()`**.
-- Migrations are immutable after generation — never edit a file in `database/migrations/`.
+- Migrations are immutable after generation - never edit a file in `database/migrations/`.
 
 ## Testing
 
