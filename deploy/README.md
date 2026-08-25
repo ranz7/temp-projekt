@@ -99,14 +99,22 @@ The checker gives running jobs `CHECKER_SHUTDOWN_GRACE_SECONDS` and marks whatev
 
 ## Why the sandbox container is not `privileged`
 
-The checker gets three grants and nothing else.
+The checker gets five grants and nothing else.
 `privileged: true` would work too and would hand over every capability on the machine, so it is not used.
 
 - **`cap_add: SYS_ADMIN`** - bubblewrap builds the sandbox by unsharing the mount, user, pid, ipc, uts and network namespaces and then `pivot_root`ing into it. Without this capability the container cannot create those namespaces at all: `bwrap: Creating new namespace failed: Operation not permitted`.
 - **`cap_add: NET_ADMIN`** - `--unshare-net` gives the submission an empty network namespace, and bubblewrap then raises loopback inside it. Without this capability that last step fails and the whole run fails with it: `bwrap: loopback: Failed RTM_NEWADDR`. The submission still has no route to anywhere; the capability is spent on the empty namespace, not on the host's network.
-- **`security_opt: seccomp=unconfined`** - Docker's default seccomp profile blocks `pivot_root` outright, whatever capabilities the container holds, so the sandbox cannot enter its own root: `bwrap: pivot_root: Operation not permitted`. This is the widest of the three and the reason the checker deserves its own machine, or at least its own VM, in a real deployment.
+- **`security_opt: seccomp=unconfined`** - Docker's default seccomp profile blocks `pivot_root` outright, whatever capabilities the container holds, so the sandbox cannot enter its own root: `bwrap: pivot_root: Operation not permitted`.
+- **`security_opt: apparmor=unconfined`** - on a host that loads AppArmor, Docker's `docker-default` profile refuses the mount changes bubblewrap makes on its way in, and the sandbox dies on its very first step: `bwrap: Failed to make / slave: Permission denied`.
+- **`security_opt: systempaths=unconfined`** - Docker masks parts of `/proc` in every container, and the sandbox cannot mount its own `/proc` over a masked one: `bwrap: Can't mount proc on /newroot/proc: Operation not permitted`.
 
 Each one was arrived at by removing it and watching the exact failure above.
+
+The last two are the ones a laptop will not teach you.
+macOS runs no AppArmor, so a sandbox that works there can still fail on Ubuntu 24.04, where `kernel.apparmor_restrict_unprivileged_userns` is on by default - and it fails at judging time, on a machine whose `/health` says it is perfectly well.
+That is why `infra/ansible` starts a bare sandbox inside the container right after starting the checker and refuses the machine when it does not come up.
+
+Together these are the widest grants here, and the reason the checker deserves its own machine, or at least its own VM, in a real deployment.
 
 cgroup v2 needs no extra grant beyond `SYS_ADMIN`, but it does need arranging, which is what `entrypoint-bwrap.sh` does before the service starts.
 A container's own cgroup arrives read-only and holds the entrypoint itself, and cgroup v2 refuses to delegate controllers out of a cgroup that holds processes.

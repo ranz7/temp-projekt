@@ -1,6 +1,6 @@
 # One checker machine, locally.
 #
-# It runs the same image and the same three grants a real checker machine gets
+# It runs the same image and the same five grants a real checker machine gets
 # from Ansible. The real fleet is thirteen machines behind SSH tunnels; here it
 # is one container on the compose network, which the app reaches directly
 # because there is nothing to tunnel through.
@@ -24,14 +24,23 @@ services:
     # Why each of these is here is written out in deploy/README.md. In short:
     # SYS_ADMIN lets bubblewrap create the namespaces and pivot_root into the
     # sandbox, NET_ADMIN lets it raise loopback inside the network namespace it
-    # unshared, and the default seccomp profile blocks pivot_root outright.
+    # unshared, the default seccomp profile blocks pivot_root outright, the
+    # default AppArmor profile refuses the mount changes bubblewrap makes, and
+    # Docker's masking of parts of /proc stops the sandbox mounting its own.
     # Nothing here is `privileged: true`, which would also hand over every other
     # capability on the machine.
+    #
+    # The last two matter on the real machines rather than on a laptop: Ubuntu
+    # loads an AppArmor profile and macOS does not, so a sandbox that works here
+    # can still fail there. `infra/ansible` proves the sandbox on each machine
+    # right after starting the checker, so that difference cannot go unnoticed.
     cap_add:
       - SYS_ADMIN
       - NET_ADMIN
     security_opt:
       - seccomp=unconfined
+      - apparmor=unconfined
+      - systempaths=unconfined
     volumes:
       # The problem packages, read only. No contest data is baked into the image
       # and none travels over HTTP. Only the host side is configurable: the two

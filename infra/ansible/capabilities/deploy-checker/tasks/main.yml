@@ -71,3 +71,42 @@
     fail_msg: >-
       {{ inventory_hostname }} answers /health but reports no problem packages.
       Check {{ oj_problems_dir }} on the machine.
+
+# A machine whose /health says it is well but whose sandbox will not start is
+# the worst state there is: the app keeps giving it submissions and every one
+# comes back a runtime error. So the sandbox is started here, once, bare - the
+# same namespaces, pivot_root, /proc and loopback a real submission needs - and
+# a machine that cannot manage it is refused rather than left in the fleet.
+- name: Start a bare sandbox inside the checker
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - "{{ oj_checker_container }}"
+      - /usr/bin/bwrap
+      - --ro-bind
+      - /
+      - /
+      - --proc
+      - /proc
+      - --dev
+      - /dev
+      - --unshare-all
+      - --die-with-parent
+      - /bin/true
+  register: oj_sandbox_probe
+  changed_when: false
+  failed_when: false
+
+- name: Refuse a machine that answers but cannot judge anything
+  ansible.builtin.assert:
+    that:
+      - oj_sandbox_probe.rc == 0
+    fail_msg: >-
+      The sandbox will not start on {{ inventory_hostname }}, so every submission
+      sent there would come back a runtime error. bubblewrap said:
+      {{ (oj_sandbox_probe.stderr | default('') | trim) or 'nothing' }}.
+      deploy/README.md lists what each grant in the checker's compose file saves
+      you from; on Ubuntu the two that matter are apparmor=unconfined and
+      systempaths=unconfined.
+    success_msg: "The sandbox starts: this machine can judge."

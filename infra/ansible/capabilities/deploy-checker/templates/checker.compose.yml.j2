@@ -15,17 +15,22 @@ services:
         required: true
     ports:
       - "127.0.0.1:{{ oj_checker_service_port }}:{{ oj_checker_port }}"
-    # The three grants the sandbox needs, and not one more. deploy/README.md
-    # works out why each is here: SYS_ADMIN so bubblewrap can create its
-    # namespaces and pivot_root, NET_ADMIN so it can raise loopback inside the
-    # network namespace it unshared, and the default seccomp profile out of the
-    # way because it blocks pivot_root outright. `privileged: true` would hand
-    # over every capability on the machine and is deliberately not used.
+    # The five grants the sandbox needs, and not one more. deploy/README.md
+    # works out why each is here. In short: SYS_ADMIN so bubblewrap can create
+    # its namespaces and pivot_root, NET_ADMIN so it can raise loopback inside
+    # the network namespace it unshared, seccomp out of the way because the
+    # default profile blocks pivot_root, AppArmor out of the way because on
+    # Ubuntu the default Docker profile refuses the mount changes bubblewrap
+    # makes, and the system paths unmasked because Docker's masking of parts of
+    # /proc stops the sandbox mounting its own. `privileged: true` would work
+    # too and would hand over every capability on the machine, so it is not used.
     cap_add:
       - SYS_ADMIN
       - NET_ADMIN
     security_opt:
       - seccomp=unconfined
+      - apparmor=unconfined
+      - systempaths=unconfined
     volumes:
       # This machine's own copy of the problem packages. No test data is baked
       # into the image and none travels over HTTP.
