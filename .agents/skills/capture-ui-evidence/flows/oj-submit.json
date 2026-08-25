@@ -1,0 +1,17 @@
+[
+  { "action": "assert", "selector": "h1:has-text('Sign in')", "state": "visible", "screenshot": true },
+  { "action": "fill", "selector": "#username", "value": "ania" },
+  { "action": "click", "selector": "button:has-text('Sign in')" },
+  { "action": "waitFor", "selector": "text=My submissions" },
+  { "action": "navigate", "url": "/problems/cf-4-A" },
+  { "action": "waitFor", "selector": "h1:has-text('Watermelon')" },
+  { "action": "waitFor", "selector": ".monaco-editor" },
+  { "action": "wait", "ms": 3000, "screenshot": true },
+  { "action": "upload", "selector": "input[type=file]", "files": ["/private/tmp/claude-503/-Users-radoslaw-mysliwiec-Desktop-projekt/465ed90b-1506-458f-a400-709829958bd2/scratchpad/solution.py"] },
+  { "action": "waitFor", "selector": "text=into the editor" },
+  { "action": "wait", "ms": 600, "screenshot": true },
+  { "action": "click", "selector": "button:has-text('Submit')" },
+  { "action": "wait", "ms": 500, "screenshot": true },
+  { "action": "waitFor", "selector": "text=Accepted" },
+  { "action": "assert", "selector": "text=Accepted", "state": "visible", "screenshot": true }
+]
