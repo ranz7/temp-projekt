@@ -269,6 +269,7 @@ describe('submission.getSubmission', () => {
       'ordinal',
       'passed',
       'pointsAwarded',
+      'presses',
       'timeMs',
       'verdict',
       'visibility'
@@ -276,14 +277,7 @@ describe('submission.getSubmission', () => {
     expect(JSON.stringify(detail)).not.toContain(hiddenActualOutput)
   })
 
-  // Production defect, not fixed here (test files only): the spec says "the number of
-  // button presses the grader counted is shown next to each test" and the checker
-  // reports `presses` per test (stored in submission__test_result_.presses_), but
-  // get-submission's query never selects it and GetSubmissionOutputDTOZ has no
-  // `presses` field on either shape - see output.dto.ts and index.ts. A combo
-  // submission's page can never show a press count. Skipped so the suite stays green;
-  // un-skip once the endpoint selects and returns `presses`.
-  it.skip('shows the button presses the grader counted, next to each test', async () => {
+  it('shows the button presses the grader counted, next to each test', async () => {
     const author = await signIn('presses-author')
     const trpc = await callerFor(author.id)
 
@@ -293,27 +287,40 @@ describe('submission.getSubmission', () => {
       sourceCode: pythonSource
     })
 
-    await db.insert(submission__test_result_).values({
-      submission_id_: created.id,
-      problem_test_id_: await findProblemTestId('public'),
-      ordinal_: 1,
-      visibility_: 'public',
-      verdict_: 'passed',
-      passed_: true,
-      points_awarded_: 0,
-      actual_output_: 'Accepted: 4',
-      time_ms_: 10,
-      memory_kb_: 2048,
-      presses_: 4
-    })
+    await db.insert(submission__test_result_).values([
+      {
+        submission_id_: created.id,
+        problem_test_id_: await findProblemTestId('public'),
+        ordinal_: 1,
+        visibility_: 'public',
+        verdict_: 'passed',
+        passed_: true,
+        points_awarded_: 0,
+        actual_output_: 'Accepted: 4',
+        time_ms_: 10,
+        memory_kb_: 2048,
+        presses_: 4
+      },
+      {
+        submission_id_: created.id,
+        problem_test_id_: await findProblemTestId('hidden'),
+        ordinal_: 1,
+        visibility_: 'hidden',
+        verdict_: 'passed',
+        passed_: true,
+        points_awarded_: 1,
+        time_ms_: 12,
+        memory_kb_: 4096,
+        presses_: 7
+      }
+    ])
 
     const detail = await trpc.submission.getSubmission({ id: created.id })
-    const [sample] = detail.tests
-    // The DTO has no `presses` field at all today - that absence is the defect this
-    // test documents, so the row is read as an untyped record rather than typed.
-    const sampleAsRecord = sample as unknown as Record<string, unknown>
+    const [sample, hidden] = detail.tests
 
-    expect(sampleAsRecord.presses).toBe(4)
+    // The count describes the person's own solution, so a hidden test carries it too.
+    expect(sample.presses).toBe(4)
+    expect(hidden.presses).toBe(7)
   })
 })
 

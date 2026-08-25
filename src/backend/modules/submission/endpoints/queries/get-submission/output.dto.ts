@@ -8,13 +8,20 @@ const submissionTestShape = {
   passed: z.boolean(),
   pointsAwarded: z.number().int().nonnegative(),
   timeMs: z.number().int().nonnegative().nullable(),
-  memoryKb: z.number().int().nonnegative().nullable()
+  memoryKb: z.number().int().nonnegative().nullable(),
+  /**
+   * How many times the solution pressed buttons on this test, counted by an
+   * interactive problem's grader. Null on every ordinary problem. It describes what
+   * the person's own solution did, never what the test contains, so a hidden test
+   * carries it too.
+   */
+  presses: z.number().int().nonnegative().nullable()
 }
 
 /**
- * A hidden test shows its number, verdict, time and memory and nothing else.
- * The object is strict on purpose: a row that smuggled in an input or an actual
- * output fails to leave the endpoint instead of quietly reaching the page.
+ * A hidden test shows its number, verdict, time, memory and its press count, and
+ * nothing else. The object is strict on purpose: a row that smuggled in an input or an
+ * actual output fails to leave the endpoint instead of quietly reaching the page.
  */
 export const HiddenSubmissionTestDTOZ = z.strictObject({
   ...submissionTestShape,
