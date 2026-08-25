@@ -10,6 +10,7 @@ Scope: Next.js 16 App Router. Homepage + HTTP handlers.
 - `/submissions` - public activity feed, no source code
 - `/submissions/mine` - submissions by the signed-in user
 - `/submissions/<id>` - submission detail (author only)
+- `/admin` - operator panel: machines list, health, enable/disable, batch test submissions
 - `api/trpc` - tRPC endpoints
 
 ## Folder conventions
