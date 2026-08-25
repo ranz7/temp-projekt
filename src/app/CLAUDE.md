@@ -1,0 +1,29 @@
+# src/app/CLAUDE.md
+
+Scope: Next.js 16 App Router. Homepage + HTTP handlers.
+
+## Surfaces
+
+- `/` - public notes list
+- `api/trpc` - tRPC
+
+## Folder conventions
+
+Inside any route folder, only Next.js special files at the top level:
+`page.tsx`, `layout.tsx`, `loading.tsx`, `error.tsx`, `route.ts`.
+Everything else lives in underscored sibling folders (`_components/`, `_trpc/`).
+
+## Rendering
+
+Server Components by default. `"use client"` only when state, effects, browser APIs, or event handlers are unavoidable.
+Data fetching in RSC: `prefetch` / `prefetchAwaited` from `@/app/_trpc/rsc`.
+Client: `useTRPC()` from `@/app/_trpc/config`.
+Every route that waits on data ships a `loading.tsx` beside its `page.tsx`.
+User-facing copy on `/` is Polish except the heading `Notes` and seeded English note text.
+
+## React conventions
+
+Named exports only, except Next.js special files which default-export.
+One component per file. File naming: kebab-case. Components PascalCase.
+Colors from CSS variables in `globals.css` - never Tailwind defaults like `bg-blue-500`.
+No margins on children - `gap` on the parent.

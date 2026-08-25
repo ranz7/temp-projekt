@@ -4,17 +4,10 @@ Single source for all agents — `AGENTS.md` points here. Skills: canonical `.ag
 
 ## What this is
 
-New product workspace. App code lives at the repo root. `.ai/` is gitignored scratch: checked-out copies of other repos, read while porting - not the app, not a place to commit.
-
-Reference clones today:
-
-| Clone | What it is |
-| --- | --- |
-| `.ai/ksi-internships-scalable-backend` | Full-stack Online Judge: Next.js + FastAPI/Beanie/Mongo + native Linux judge |
-| `.ai/ksi-internship-scalable-backend` | Earlier internship fork (frontend / backend / checker) |
-| `.ai/scalable-backend` | Three HTTP apps: frontend :3000, backend :8000, sprawdzarka :8002 + OIOIOI |
-
-Read a clone's `README.md` (and `AGENTS/` if present) before copying a pattern from it. Never treat `.ai` as the working tree unless the user names that clone.
+Runnable Kraken-shaped skeleton: Next.js App Router, tRPC, Drizzle, Postgres.
+One public module (`note`) and `/` listing its rows.
+No auth, workspaces, or design system.
+`.ai/` is gitignored scratch: checked-out copies of other repos, read while porting.
 
 ## Lanes
 
@@ -24,29 +17,47 @@ Human sits in two seats: confirm the spec, final review - human merges (squash).
 
 **Every human-facing output - chat sections, reports, matrices, PR bodies - in ≤40 words per section/ bullet point.** Terse: substance stays whole, fluff dies; fragments OK.
 
-**Plain language.** Say what happens to a user, a problem, a submission; symbol names come after, in brackets, only where they help a human find the spot. Verdicts and reviews walk one concrete case: how it behaves today, how it behaves after. A finding a non-programmer cannot weigh is not reported yet. A question a non-programmer cannot answer is not asked yet, it is rewritten; answer options describe what the user will see or what becomes allowed, never how it is built.
+**Plain language.** Say what happens to a user, a note, a page; symbol names come after, in brackets, only where they help a human find the spot. Verdicts and reviews walk one concrete case: how it behaves today, how it behaves after. A finding a non-programmer cannot weigh is not reported yet. A question a non-programmer cannot answer is not asked yet, it is rewritten; answer options describe what the user will see or what becomes allowed, never how it is built.
 
 ## Stack
 
-Not locked until the app exists at repo root. Prior art in `.ai/` is FastAPI + Next.js + a judge process (Mongo or OIOIOI), not Kraken's tRPC/Drizzle stack.
-
-When the app lands, put commands and architecture in this file and in per-directory `CLAUDE.md` files. Until then: follow the clone's README for how that reference runs; do not invent a second stack.
+- **Framework**: Next.js 16 (App Router, Turbopack) — single project
+- **Language**: TypeScript strict mode
+- **API**: tRPC v11, superjson
+- **Database**: PostgreSQL 17 (Docker) + Drizzle ORM
+- **Testing**: Vitest — unit + integration against a real database
+- **Frontend**: React 19, Tailwind v4
+- **Tooling**: Biome, bun
 
 ## Commands
 
-App scripts live in the app's own README / package manager once the tree exists.
+```bash
+bun dev                     # Next.js dev (Turbopack)
+bun run build               # Production build
+bun run lint / lint:fix     # Biome check / autofix
+bun run format              # Biome format --write
+bun run typecheck           # tsc --noEmit
+bun run db:up / db:down     # Start / stop local Postgres (Docker)
+bun run db:migrate          # Apply migrations
+bun run db:seed             # Seed notes if the table is empty
+bun run test                # Unit
+bun run test:integration    # Integration (tRPC caller + real DB `projekt_test`)
+```
 
-Agents never start a dev server on the default port - the human's own server usually owns 3000/8000 and you would screenshot their tree, not yours. Pick a random port in 3200-3899 (`PORT=$((3200 + RANDOM % 700))`), poll it until it answers, and use that URL everywhere downstream.
+Agents never start a dev server on the default port - the human's own `bun dev` usually owns 3000 and you would screenshot their tree, not yours. Pick a random port in 3200-3899 (`PORT=$((3200 + RANDOM % 700))`), poll it until it answers, and use that URL everywhere downstream.
 
 ## Must Never
 
 - **Never commit directly to `main`** — use PRs
-- Never commit `.ai/`, `.env`, secrets, or `evidence/`
+- **Every `db.delete()` and `db.update()` MUST have `.where()`** — no linter catches this
+- Never edit a file in `src/backend/database/migrations/` — immutable once generated
 - Never hand-edit generated files - regenerate via their scripts
 - Never use em dashes; plain `-` everywhere, all output
 - Never add an agent name as co-author or a session trailer to commit messages
 - Never use `any`, `as` assertions, or `@ts-ignore` / `# type: ignore` without justification
-- Named exports only in TypeScript — no default exports. `type`, not `interface`
+- Never mock the database in tests — real DB + seed
+- **Never invent entity UUIDs** (`crypto.randomUUID()` and friends) — PKs come from Postgres `uuid_generate_v7()`; omit the id on create
+- Named exports only — no default exports except Next.js special files (`page`, `layout`, `loading`, `error`, `route`). `type`, not `interface`
 
 ## Engineering Standards
 
@@ -62,20 +73,34 @@ Everything on GitHub and in the codebase is English — issues, PRs, comments, c
 
 ## Architecture
 
-Repo root is the app. `.ai/<name>/` is a read-only reference checkout of another git repo.
+```
+src/
+├── app/                 App Router — UI + HTTP handlers
+│   ├── page.tsx         homepage, prefetches listNotes
+│   ├── _components/     homepage cards and skeleton
+│   ├── _trpc/           client, RSC caller, query client
+│   └── api/trpc/
+├── shared/              environment helpers
+└── backend/
+    ├── appRouter.ts     { note }
+    ├── trpc/            init, context, publicProcedure
+    ├── database/        db, schema barrel, migrations, seed
+    └── modules/note/    vertical slice
+```
 
-**Full specs (when they exist):**
-- Product / agent loop → this file
-- Skills catalog → `.agents/skills/README.md`
+Path aliases: `@backend/*` → `src/backend/*`, `@shared/*` → `src/shared/*`, `@/*` → `src/*`.
+
+**Full specs:**
+- Backend conventions, DB rules, testing → `src/backend/CLAUDE.md`
+- Operator UI, App Router, React conventions → `src/app/CLAUDE.md`
 - Confirmed feature specs → `.agents/specs/`
-- Research reports → `.agents/research/`
-- Reference clone instructions → that clone's `README.md` and `AGENTS/`
 
 ## File and Directory Naming
 
-Only `a-z`, `0-9`, `-`, `_`, `.`. Timestamped files (specs, research): `YYYY-MM-DD-HH.MM-description.md`.
+Only `a-z`, `0-9`, `-`, `_`, `.`. Endpoint directories are kebab-case verb-noun (`list-notes`). Migrations are `<idx>__<module>__<action>__<subject>.sql`. Timestamped files (specs, research): `YYYY-MM-DD-HH.MM-description.md`.
 
 ## Agent Context
 
-- `algo-*` skills were written for the AlgoAcademy/Kraken tRPC+Drizzle layout. Invoke them only when this repo actually has that layout; otherwise follow the code that is here.
-- Format / lint / typecheck before finishing UI/API work when the app has those scripts - not a hard gate until CI exists.
+- tRPC cache: `prefetch` / `prefetchAwaited` + `useQuery` via `useTRPC()` from `@/app/_trpc/config`.
+- `bun run format` / `lint` / `typecheck` before finishing UI/API work when useful - not a hard gate.
+- `bun run lint:fix` skips unsafe fixes - remove unused imports manually and re-run.

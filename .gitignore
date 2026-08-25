@@ -3,3 +3,15 @@
 .env.*
 !.env.example
 evidence/
+
+node_modules/
+.next/
+out/
+build/
+dist/
+.vitest-cache/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+*.log
+.DS_Store
