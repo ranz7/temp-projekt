@@ -1,10 +1,23 @@
 'use client'
 
-export default function HomeError() {
+import { ErrorState } from './_components/error-state'
+
+export default function HomeError({
+  reset
+}: {
+  error: Error & { digest?: string }
+  reset: () => void
+}) {
   return (
-    <main className='mx-auto flex min-h-svh w-full max-w-lg flex-col gap-6 p-6'>
-      <h1 className='font-semibold text-2xl tracking-tight'>Notes</h1>
-      <p className='text-muted'>Nie udało się wczytać notatek.</p>
+    <main className='mx-auto flex w-full max-w-5xl flex-col gap-6 p-6'>
+      <ErrorState description="This page couldn't load. Try refreshing." />
+      <button
+        type='button'
+        onClick={reset}
+        className='self-start rounded-lg border border-border px-3 py-2 font-medium text-sm hover:bg-placeholder'
+      >
+        Try again
+      </button>
     </main>
   )
 }
