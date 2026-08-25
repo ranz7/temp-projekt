@@ -4,7 +4,7 @@ import {
   SESSION_COOKIE_NAME,
   signSession
 } from '@backend/modules/account/internal-functions/session'
-import { account__user_ } from '@backend/modules/account/schema'
+import { account__user_, lower } from '@backend/modules/account/schema'
 import { createCallerFactory, createTRPCContext } from '@backend/trpc'
 import { eq, like } from 'drizzle-orm'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -33,6 +33,15 @@ async function countUsers(username: string): Promise<number> {
     .select({ id: account__user_.id })
     .from(account__user_)
     .where(eq(account__user_.username_, username))
+
+  return rows.length
+}
+
+async function countUsersIgnoringCase(username: string): Promise<number> {
+  const rows = await db
+    .select({ id: account__user_.id })
+    .from(account__user_)
+    .where(eq(lower(account__user_.username_), username.toLowerCase()))
 
   return rows.length
 }
@@ -69,6 +78,18 @@ describe('account.logIn', () => {
 
     expect(second.id).toBe(first.id)
     expect(await countUsers(username)).toBe(1)
+  })
+
+  it('treats a capitalised name as the same person', async () => {
+    const lowercase = `${usernamePrefix}ania`
+    const capitalised = `${usernamePrefix}Ania`
+
+    const first = await (await caller()).trpc.account.logIn({ username: lowercase })
+    const second = await (await caller()).trpc.account.logIn({ username: capitalised })
+
+    expect(second.id).toBe(first.id)
+    expect(second.username).toBe(lowercase)
+    expect(await countUsersIgnoringCase(capitalised)).toBe(1)
   })
 
   it('refuses a name with a space', async () => {

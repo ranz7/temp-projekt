@@ -22,6 +22,13 @@
       "when": 1787676874837,
       "tag": "0002__judge__replace__note_with_judge_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787677396494,
+      "tag": "0003__account__update__username_case_insensitive",
+      "breakpoints": true
     }
   ]
 }

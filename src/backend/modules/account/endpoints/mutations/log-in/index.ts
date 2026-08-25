@@ -1,5 +1,5 @@
 import { setSessionCookie } from '@backend/modules/account/internal-functions/session'
-import { account__user_ } from '@backend/modules/account/schema'
+import { account__user_, lower } from '@backend/modules/account/schema'
 import { publicProcedure } from '@backend/trpc'
 import { TRPCError } from '@trpc/server'
 import { eq } from 'drizzle-orm'
@@ -19,22 +19,24 @@ export const logInProcedure = publicProcedure
   .input(LogInInputDTOZ)
   .output(LogInOutputDTOZ)
   .mutation(async ({ ctx, input }) => {
+    // Capitals never split an account: `Ania` signs in as the existing `ania`.
     async function findUser(): Promise<User | undefined> {
       const [row] = await ctx.db
         .select(userColumns)
         .from(account__user_)
-        .where(eq(account__user_.username_, input.username))
+        .where(eq(lower(account__user_.username_), input.username.toLowerCase()))
         .limit(1)
 
       return row
     }
 
     async function createUser(): Promise<User | undefined> {
-      // A parallel login for the same name wins the unique index and returns no row.
+      // The name is stored as typed. A parallel login for the same name wins the
+      // case-insensitive unique index and returns no row.
       const [row] = await ctx.db
         .insert(account__user_)
         .values({ username_: input.username })
-        .onConflictDoNothing({ target: account__user_.username_ })
+        .onConflictDoNothing()
         .returning(userColumns)
 
       return row
