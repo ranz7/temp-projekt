@@ -29,6 +29,15 @@ oj_session_secret: "{{ lookup('ansible.builtin.ini', 'OJ_SESSION_SECRET', file=o
 oj_domain: "{{ (lookup('ansible.builtin.ini', 'OJ_DOMAIN', file=oj_deploy_env_file, type='properties', default='') if oj_secrets_available | bool else '') | trim }}"
 oj_acme_email: "{{ (lookup('ansible.builtin.ini', 'OJ_ACME_EMAIL', file=oj_deploy_env_file, type='properties', default='') if oj_secrets_available | bool else '') | trim }}"
 
+# The commit being deployed, short.
+#
+# `build-source-archive` sets `oj_source_revision` on the control host at the
+# start of the run, and every machine reads it back out of that host's facts -
+# a machine has no checkout of its own to ask. Defined here once, so all three
+# image names and the closing summary get the same answer. Empty means the
+# control play did not run, which the machine plays refuse to go on with.
+oj_revision: "{{ hostvars['control-node']['oj_source_revision'] | default('') }}"
+
 # --- images -------------------------------------------------------------------
 # Every tag is pinned. Nothing is `latest`, here or in the Dockerfiles under
 # `deploy/`, so a re-run never picks up a different base image by surprise.

@@ -66,6 +66,19 @@ The application machine gets a keypair of its own, generated there on the first 
 The private half never leaves that machine; your personal key is never copied to a server.
 The public half is installed on each checker with the narrowest options SSH has: it may open one forward, to that machine's checker port, and nothing else - no shell, no command, no agent, no tty.
 
+## When a machine cannot be reached
+
+Two things are survivable, and the run says so at the end by name and address rather than stopping:
+
+- a machine that does not answer on SSH at all;
+- a machine that answers but wants a sudo password, which the deployment does not have.
+
+Every other machine is set up, the application machine is deployed in full, and the app lists the missing ones as offline and sends them nothing.
+Run `make deploy` again once such a machine is reachable and it joins the fleet.
+
+A machine that answers, gives us root and then fails part-way through is a different thing: it may be half set up, so the run ends failed and names it.
+The other machines are still finished first.
+
 ## Adding or removing a machine
 
 One line in `infra/ansible/hosts.yml`, then `make deploy` again:
