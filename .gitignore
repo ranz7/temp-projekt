@@ -1,0 +1,5 @@
+.ai/**
+.env
+.env.*
+!.env.example
+evidence/

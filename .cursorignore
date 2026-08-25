@@ -1,0 +1,6 @@
+# Keep secrets out of any external agent's context.
+.env
+.env.*
+!.env.example
+*.pem
+*.key

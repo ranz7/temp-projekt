@@ -1,0 +1,4 @@
+interface:
+  display_name: "Capture UI Evidence"
+  short_description: "Capture performance, screenshots, and video"
+  default_prompt: "Use $capture-ui-evidence to verify this UI change and prepare PR evidence."
