@@ -1,0 +1,41 @@
+# Managed by Ansible capability deploy-app-web.
+#
+# Publishes no port: the proxy in front of it is the only way in, over the
+# internal `oj-ingress` network. Migrations and the seed run in the image's own
+# entrypoint before the server starts, so an empty database becomes a working
+# site with no second command.
+name: online-judge-web
+
+services:
+  web:
+    image: {{ oj_web_image }}
+    container_name: {{ oj_web_container }}
+    restart: unless-stopped
+    env_file:
+      - path: {{ oj_compose_dir }}/web.env
+        required: true
+    networks:
+      ingress:
+        aliases: [web]
+      db:
+      tunnels:
+    healthcheck:
+      # Readiness, not liveness: inside the stack, healthy has to mean the
+      # database answers, because that is what the proxy is about to rely on.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/ready"]
+      interval: 10s
+      timeout: 5s
+      # Covers migrate and seed on a database that is empty.
+      start_period: 120s
+      retries: 3
+
+networks:
+  ingress:
+    external: true
+    name: {{ oj_ingress_network }}
+  db:
+    external: true
+    name: {{ oj_db_network }}
+  tunnels:
+    external: true
+    name: {{ oj_tunnels_network }}

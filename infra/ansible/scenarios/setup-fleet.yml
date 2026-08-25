@@ -1,0 +1,140 @@
+---
+# Scenario: set up the whole system - the application machine and every checker.
+#
+#   make deploy
+#
+# Safe to run again at any time. It changes only what differs: the same commit
+# builds no image and recreates no container, so a machine that is judging
+# submissions is left judging them.
+
+- name: Check the deployment can go ahead, and pack the source
+  hosts: control
+  become: false
+  gather_facts: false
+  any_errors_fatal: true
+
+  pre_tasks:
+    - name: Look for the file the secrets come from
+      ansible.builtin.stat:
+        path: "{{ oj_deploy_env_file }}"
+      register: oj_deploy_env_present
+
+    - name: Refuse to start without it
+      ansible.builtin.assert:
+        that:
+          - oj_deploy_env_present.stat.exists
+        fail_msg: >-
+          {{ oj_deploy_env_file }} does not exist. Copy
+          infra/ansible/deploy.env.example to it and fill it in. It is
+          gitignored, and it is the only place a real secret lives.
+
+    - name: Refuse to start with a secret missing
+      ansible.builtin.assert:
+        that:
+          - oj_service_key | length >= 16
+          - oj_postgres_password | length >= 16
+          - oj_session_secret | length >= 16
+        fail_msg: >-
+          OJ_SERVICE_KEY, OJ_POSTGRES_PASSWORD and OJ_SESSION_SECRET must each be
+          set in {{ oj_deploy_env_file }} and at least 16 characters long.
+          `openssl rand -hex 32` makes a good one.
+
+    - name: Refuse a domain with no contact address
+      ansible.builtin.assert:
+        that:
+          - oj_acme_email | length > 0
+        fail_msg: >-
+          OJ_DOMAIN is set to "{{ oj_domain }}", so OJ_ACME_EMAIL must be set too:
+          Let's Encrypt writes there about an expiring certificate.
+      when: oj_domain | length > 0
+
+    - name: Refuse an inventory that cannot be deployed
+      ansible.builtin.assert:
+        that:
+          - groups['application'] | default([]) | length == 1
+          - groups['checkers'] | default([]) | length > 0
+          - oj_checker_machines | map(attribute='localPort') | list | unique | length
+            == oj_checker_machines | length
+          - oj_checker_machines | map(attribute='name') | list | unique | length
+            == oj_checker_machines | length
+          - oj_checker_machines | selectattr('address', 'equalto', '') | list | length == 0
+        fail_msg: >-
+          infra/ansible/hosts.yml needs exactly one application machine, at least
+          one checker, and a different checker_local_port on every checker.
+
+  roles:
+    - role: build-source-archive
+      tags: [source]
+
+- name: Make every machine able to run Ansible modules
+  hosts: fleet
+  gather_facts: false
+  any_errors_fatal: true
+
+  roles:
+    - role: bootstrap-python
+      tags: [bootstrap]
+
+- name: Prepare the application machine
+  hosts: application
+  gather_facts: true
+  any_errors_fatal: true
+
+  roles:
+    - role: install-docker
+      tags: [docker]
+    - role: ensure-ops-layout
+      tags: [layout]
+    - role: ship-source
+      tags: [source]
+    # Before the checkers, because they are given the public half of this key.
+    - role: ensure-app-ssh-key
+      tags: [ssh-key]
+
+- name: Set up every checker machine
+  hosts: checkers
+  gather_facts: true
+  # One unreachable checker should not stop the other twelve, and the app
+  # simply gives no work to a machine that does not answer.
+  any_errors_fatal: false
+
+  roles:
+    - role: install-docker
+      tags: [docker]
+    - role: ensure-ops-layout
+      tags: [layout]
+    - role: ship-source
+      tags: [source]
+    - role: authorize-app-ssh-key
+      tags: [ssh-key]
+    - role: sync-problem-packages
+      tags: [problems]
+    - role: deploy-checker
+      tags: [checker]
+
+- name: Run the application machine
+  hosts: application
+  gather_facts: true
+  any_errors_fatal: true
+
+  roles:
+    - role: ensure-docker-networks
+      tags: [networks]
+    - role: deploy-app-postgres
+      tags: [postgres]
+    - role: deploy-checker-tunnels
+      tags: [tunnels]
+    - role: deploy-app-web
+      tags: [web]
+    - role: deploy-app-proxy
+      tags: [proxy]
+
+  post_tasks:
+    - name: Say where the site is
+      ansible.builtin.debug:
+        msg: >-
+          {{ oj_checker_machines | length }} checkers, commit {{ oj_revision }}.
+          The site is at
+          {{ 'https://' ~ oj_domain if oj_domain | length > 0 else 'http://' ~ ansible_host }}
+          and the machines are listed at
+          {{ 'https://' ~ oj_domain if oj_domain | length > 0 else 'http://' ~ ansible_host }}/admin

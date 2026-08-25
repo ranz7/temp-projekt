@@ -1,0 +1,121 @@
+---
+# Capability: deploy-app-proxy
+# Problem: the site should answer over HTTPS on a domain, and should still answer
+# on the machine's bare address before anyone has configured one.
+#
+# Caddy does both from the same file. With a domain it obtains and renews a
+# certificate by itself and redirects plain HTTP to it; with none it serves the
+# app over HTTP on port 80. Adding the domain later is a line in deploy.env and
+# the same command again.
+
+- name: Require a contact address once a domain is configured
+  ansible.builtin.assert:
+    that:
+      - oj_acme_email | length > 0
+    fail_msg: >-
+      OJ_DOMAIN is set to "{{ oj_domain }}", so OJ_ACME_EMAIL must be set too in
+      infra/ansible/deploy.env. Let's Encrypt writes there about an expiring
+      certificate.
+  when: oj_domain | length > 0
+
+- name: Ensure the proxy directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ oj_ops_root }}/proxy"
+    - "{{ oj_data_dir }}/caddy"
+    - "{{ oj_data_dir }}/caddy-config"
+
+- name: Render the Caddyfile
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: "{{ oj_ops_root }}/proxy/Caddyfile"
+    owner: root
+    group: root
+    mode: "0644"
+  register: oj_caddyfile
+
+- name: Render the proxy Compose file
+  ansible.builtin.template:
+    src: proxy.compose.yml.j2
+    dest: "{{ oj_compose_dir }}/proxy.compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Pull the pinned Caddy image
+  ansible.builtin.command:
+    cmd: docker pull {{ oj_caddy_image }}
+  register: oj_caddy_pull
+  changed_when: >-
+    ('Downloaded newer image' in oj_caddy_pull.stdout)
+    or ('Pull complete' in oj_caddy_pull.stdout)
+
+- name: Check the Caddyfile before it replaces a working one
+  ansible.builtin.command:
+    argv:
+      - docker
+      - run
+      - --rm
+      - -v
+      - "{{ oj_ops_root }}/proxy/Caddyfile:/etc/caddy/Caddyfile:ro"
+      - "{{ oj_caddy_image }}"
+      - caddy
+      - validate
+      - --config
+      - /etc/caddy/Caddyfile
+  changed_when: false
+
+- name: Refuse to start when something else already holds port 80 or 443
+  ansible.builtin.shell: |
+    set -euo pipefail
+    for port in 80 443; do
+      if ss -ltn "sport = :${port}" 2>/dev/null | grep -q LISTEN; then
+        if docker ps --format '{% raw %}{{.Names}}{% endraw %}' | grep -qx {{ oj_proxy_container }}; then
+          continue
+        fi
+        echo "Port ${port} is already in use and {{ oj_proxy_container }} is not the listener."
+        ss -ltnp "sport = :${port}" || true
+        exit 1
+      fi
+    done
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Start the proxy
+  ansible.builtin.command:
+    cmd: >-
+      docker compose
+      --project-directory {{ oj_compose_dir }}
+      -f {{ oj_compose_dir }}/proxy.compose.yml
+      up -d --remove-orphans
+  register: oj_proxy_up
+  changed_when: >-
+    ('Created' in oj_proxy_up.stderr)
+    or ('Started' in oj_proxy_up.stderr)
+    or ('Recreated' in oj_proxy_up.stderr)
+
+# The Caddyfile is mounted, so a changed one is read only at start.
+- name: Reload the proxy when its configuration changed
+  ansible.builtin.command:
+    cmd: >-
+      docker exec {{ oj_proxy_container }}
+      caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+  when: oj_caddyfile is changed and oj_proxy_up is not changed
+  changed_when: true
+
+- name: Wait until the site answers
+  ansible.builtin.uri:
+    url: "http://127.0.0.1/api/health"
+    status_code: [200, 308]
+    follow_redirects: none
+  register: oj_site_health
+  retries: 30
+  delay: 3
+  until: oj_site_health.status | default(0) in [200, 308]
+  changed_when: false

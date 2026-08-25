@@ -1,0 +1,71 @@
+---
+# Capability: deploy-app-web
+# Problem: the site, its API and the dispatcher that hands submissions to the
+# machines all run from one image, and the database has to be in the right shape
+# before any of it serves.
+#
+# The image's entrypoint applies migrations and seeds the problem packages, then
+# execs the server; both steps are safe to repeat. The image is tagged with the
+# commit, so a re-run of the same commit builds nothing and leaves the running
+# container - and whatever it is judging - alone.
+
+- name: Look for the web image of this commit
+  ansible.builtin.command:
+    cmd: docker image inspect {{ oj_web_image }}
+  register: oj_web_image_present
+  changed_when: false
+  failed_when: false
+
+- name: Build the web image
+  ansible.builtin.command:
+    cmd: >-
+      docker build
+      -f {{ oj_src_dir }}/deploy/web/Dockerfile
+      -t {{ oj_web_image }}
+      {{ oj_src_dir }}
+  when: oj_web_image_present.rc != 0 or oj_force_rebuild | bool
+  changed_when: true
+
+- name: Render the app env file
+  ansible.builtin.template:
+    src: web.env.j2
+    dest: "{{ oj_compose_dir }}/web.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Render the app Compose file
+  ansible.builtin.template:
+    src: web.compose.yml.j2
+    dest: "{{ oj_compose_dir }}/web.compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Start the app
+  ansible.builtin.command:
+    cmd: >-
+      docker compose
+      --project-directory {{ oj_compose_dir }}
+      -f {{ oj_compose_dir }}/web.compose.yml
+      up -d --remove-orphans
+  register: oj_web_up
+  changed_when: >-
+    ('Created' in oj_web_up.stderr)
+    or ('Started' in oj_web_up.stderr)
+    or ('Recreated' in oj_web_up.stderr)
+
+- name: Wait until the app is ready to serve
+  ansible.builtin.command:
+    argv:
+      - docker
+      - inspect
+      - --format
+      - "{% raw %}{{.State.Health.Status}}{% endraw %}"
+      - "{{ oj_web_container }}"
+  register: oj_web_health
+  retries: 60
+  delay: 5
+  until: oj_web_health.stdout == 'healthy'
+  changed_when: false

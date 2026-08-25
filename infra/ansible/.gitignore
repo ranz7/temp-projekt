@@ -1,0 +1,6 @@
+# The real secrets. Never committed; deploy.env.example documents its keys.
+deploy.env
+# Marker written by `make deploy` after the pinned collections are installed.
+.galaxy-installed
+*.retry
+.source.tar

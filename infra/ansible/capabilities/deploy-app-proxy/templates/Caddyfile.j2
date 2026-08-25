@@ -1,0 +1,21 @@
+# Managed by Ansible capability deploy-app-proxy.
+#
+{% if oj_domain | length > 0 %}
+# A domain is configured, so Caddy obtains and renews a certificate for it by
+# itself and answers over HTTPS. Plain HTTP is redirected there, which Caddy does
+# on its own for a named site.
+{
+	email {{ oj_acme_email }}
+}
+
+{{ oj_domain }} {
+	reverse_proxy http://web:3000
+}
+{% else %}
+# No domain is configured, so the site answers over plain HTTP on this machine's
+# address. Nothing about the deployment changes when one is added later: put it
+# in infra/ansible/deploy.env and run `make deploy` again.
+:80 {
+	reverse_proxy http://web:3000
+}
+{% endif %}

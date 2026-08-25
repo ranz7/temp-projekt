@@ -1,0 +1,25 @@
+# Managed by Ansible capability deploy-checker-tunnels.
+#
+# Thirteen permanent SSH forwards in one container, on the app's own Docker
+# network, so the app addresses `tunnels:9001` and needs no host networking and
+# no address of any checker machine.
+#
+# Nothing about a particular deployment is in here: the tunnel list, the key and
+# the known hosts are all mounted at run time.
+FROM {{ oj_alpine_image }}
+
+RUN apk add --no-cache openssh-client
+
+COPY tunnels-entrypoint.sh /usr/local/bin/tunnels-entrypoint.sh
+COPY tunnel-supervisor.sh /usr/local/bin/tunnel-supervisor.sh
+COPY tunnels-health.sh /usr/local/bin/tunnels-health.sh
+RUN chmod +x /usr/local/bin/tunnels-entrypoint.sh \
+             /usr/local/bin/tunnel-supervisor.sh \
+             /usr/local/bin/tunnels-health.sh
+
+ENV TUNNELS_CONF=/etc/tunnels/tunnels.conf
+ENV TUNNELS_RUN_DIR=/run/tunnels
+ENV TUNNELS_KEY=/etc/tunnels/id_ed25519
+ENV TUNNELS_KNOWN_HOSTS=/etc/tunnels/known_hosts
+
+ENTRYPOINT ["/usr/local/bin/tunnels-entrypoint.sh"]

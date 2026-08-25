@@ -1,0 +1,66 @@
+---
+# Capability: deploy-app-postgres
+# Problem: the app keeps everything - problems, submissions, the queue - in
+# Postgres, and the data must outlive every container.
+#
+# The data directory is on the machine's disk, so `docker compose down` and a new
+# image leave the database where it is.
+
+- name: Ensure the Postgres data directory
+  ansible.builtin.file:
+    path: "{{ oj_data_dir }}/postgres"
+    state: directory
+    # The alpine image runs as uid 70 and writes here itself.
+    owner: "70"
+    group: "70"
+    mode: "0700"
+
+- name: Render the Postgres env file
+  ansible.builtin.template:
+    src: postgres.env.j2
+    dest: "{{ oj_compose_dir }}/postgres.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Render the Postgres Compose file
+  ansible.builtin.template:
+    src: postgres.compose.yml.j2
+    dest: "{{ oj_compose_dir }}/postgres.compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Pull the pinned Postgres image
+  ansible.builtin.command:
+    cmd: docker pull {{ oj_postgres_image }}
+  register: oj_postgres_pull
+  changed_when: >-
+    ('Downloaded newer image' in oj_postgres_pull.stdout)
+    or ('Pull complete' in oj_postgres_pull.stdout)
+
+- name: Start Postgres
+  ansible.builtin.command:
+    cmd: >-
+      docker compose
+      --project-directory {{ oj_compose_dir }}
+      -f {{ oj_compose_dir }}/postgres.compose.yml
+      --env-file {{ oj_compose_dir }}/postgres.env
+      up -d --remove-orphans
+  register: oj_postgres_up
+  changed_when: >-
+    ('Created' in oj_postgres_up.stderr)
+    or ('Started' in oj_postgres_up.stderr)
+    or ('Recreated' in oj_postgres_up.stderr)
+
+- name: Wait until Postgres accepts connections
+  ansible.builtin.command:
+    cmd: >-
+      docker exec {{ oj_postgres_container }}
+      pg_isready -U {{ oj_postgres_user }} -d {{ oj_postgres_db }}
+  register: oj_postgres_ready
+  retries: 30
+  delay: 2
+  until: oj_postgres_ready.rc == 0
+  changed_when: false

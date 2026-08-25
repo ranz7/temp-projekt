@@ -1,0 +1,48 @@
+---
+# Capability: build-source-archive
+# Problem: the machines build their own images, so they need the source. There is
+# no registry in this deployment, so the committed tree travels as one tar.
+#
+# Runs on the control host only. `git archive` writes the commit, not the working
+# tree, and stamps every file with the commit date, so the same commit produces a
+# byte-identical archive: copying it to a machine that already has it is a no-op,
+# and nothing is rebuilt or restarted.
+
+# The git module clones and checks out; none of the three below do that.
+- name: Read the commit being deployed # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: git -C {{ oj_repo_root }} rev-parse --short=12 HEAD
+  register: oj_git_revision
+  changed_when: false
+
+- name: Remember the commit being deployed
+  ansible.builtin.set_fact:
+    oj_source_revision: "{{ oj_git_revision.stdout | trim }}"
+
+- name: Look for uncommitted changes # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: git -C {{ oj_repo_root }} status --porcelain
+  register: oj_git_status
+  changed_when: false
+
+- name: Say plainly that uncommitted work is not deployed
+  ansible.builtin.debug:
+    msg: >-
+      This checkout has uncommitted changes. The machines get commit
+      {{ oj_source_revision }} as it is in git; nothing uncommitted is deployed.
+  when: oj_git_status.stdout | trim | length > 0
+
+- name: Build the source archive # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: >-
+      git -C {{ oj_repo_root }} archive --format=tar
+      -o {{ oj_local_archive }} {{ oj_source_revision }}
+  changed_when: false
+
+# Reads the archive's table of contents; unarchive would unpack it.
+- name: Refuse an archive without the problem packages # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: tar -tf {{ oj_local_archive }} problems/
+  register: oj_archive_problems
+  changed_when: false
+  failed_when: oj_archive_problems.rc != 0 or oj_archive_problems.stdout | length == 0

@@ -1,0 +1,50 @@
+---
+# Capability: ship-source
+# Problem: the machines build their own images and there is no registry, so each
+# one needs the committed tree on its disk.
+#
+# The archive is byte-identical for a given commit, so `copy` reports a change
+# only when the commit changed - which is what keeps a re-run from rebuilding
+# images and restarting containers that are judging submissions.
+
+- name: Copy the source archive
+  ansible.builtin.copy:
+    src: "{{ oj_local_archive }}"
+    dest: "{{ oj_source_archive }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: oj_source_copy
+
+- name: Look for an already unpacked source tree
+  ansible.builtin.stat:
+    path: "{{ oj_src_dir }}/package.json"
+  register: oj_src_present
+
+- name: Decide whether the source tree has to be written again
+  ansible.builtin.set_fact:
+    oj_source_changed: "{{ (oj_source_copy is changed) or (not oj_src_present.stat.exists) }}"
+
+- name: Throw away the previous source tree
+  ansible.builtin.file:
+    path: "{{ oj_src_dir }}"
+    state: absent
+  when: oj_source_changed | bool
+
+- name: Recreate the source directory
+  ansible.builtin.file:
+    path: "{{ oj_src_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: oj_source_changed | bool
+
+- name: Unpack the source tree
+  ansible.builtin.unarchive:
+    src: "{{ oj_source_archive }}"
+    dest: "{{ oj_src_dir }}"
+    remote_src: true
+    owner: root
+    group: root
+  when: oj_source_changed | bool

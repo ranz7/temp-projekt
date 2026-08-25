@@ -1,0 +1,69 @@
+---
+# Knobs shared by every machine. Secrets are not here: they are read from
+# `infra/ansible/deploy.env`, which is gitignored.
+
+# --- where the deployment keeps its files -------------------------------------
+oj_ops_root: /opt/online-judge
+oj_src_dir: "{{ oj_ops_root }}/src"
+oj_compose_dir: "{{ oj_ops_root }}/compose"
+oj_data_dir: "{{ oj_ops_root }}/data"
+oj_problems_dir: "{{ oj_ops_root }}/problems"
+oj_ssh_dir: "{{ oj_ops_root }}/ssh"
+oj_source_archive: "{{ oj_ops_root }}/source.tar"
+# The same archive on the control host, before it is copied out.
+oj_local_archive: "{{ inventory_dir }}/.source.tar"
+
+# The checkout this playbook ships. `inventory_dir` is `infra/ansible`.
+oj_repo_root: "{{ inventory_dir }}/../.."
+
+# --- secrets ------------------------------------------------------------------
+# Read from a plain KEY=VALUE file that is never committed. A missing key reads
+# as empty, and the playbook refuses to start when a required one is empty.
+oj_deploy_env_file: "{{ inventory_dir }}/deploy.env"
+# A missing file reads as empty everywhere, so `make check` works on a fresh
+# checkout; `make deploy` refuses to start until the file is there and filled in.
+oj_secrets_available: "{{ oj_deploy_env_file is exists }}"
+oj_service_key: "{{ lookup('ansible.builtin.ini', 'OJ_SERVICE_KEY', file=oj_deploy_env_file, type='properties', default='') if oj_secrets_available | bool else '' }}"
+oj_postgres_password: "{{ lookup('ansible.builtin.ini', 'OJ_POSTGRES_PASSWORD', file=oj_deploy_env_file, type='properties', default='') if oj_secrets_available | bool else '' }}"
+oj_session_secret: "{{ lookup('ansible.builtin.ini', 'OJ_SESSION_SECRET', file=oj_deploy_env_file, type='properties', default='') if oj_secrets_available | bool else '' }}"
+oj_domain: "{{ (lookup('ansible.builtin.ini', 'OJ_DOMAIN', file=oj_deploy_env_file, type='properties', default='') if oj_secrets_available | bool else '') | trim }}"
+oj_acme_email: "{{ (lookup('ansible.builtin.ini', 'OJ_ACME_EMAIL', file=oj_deploy_env_file, type='properties', default='') if oj_secrets_available | bool else '') | trim }}"
+
+# --- images -------------------------------------------------------------------
+# Every tag is pinned. Nothing is `latest`, here or in the Dockerfiles under
+# `deploy/`, so a re-run never picks up a different base image by surprise.
+oj_postgres_image: postgres:17.11-alpine3.23
+oj_caddy_image: caddy:2.11.4-alpine
+oj_alpine_image: alpine:3.23.5
+
+# The two images built from `deploy/`, and the tunnel image built from this
+# role's own Dockerfile. All three are tagged with the commit being deployed, so
+# the same commit twice rebuilds nothing and recreates no container.
+oj_web_image: "online-judge-web:{{ oj_revision }}"
+oj_checker_image: "online-judge-checker:{{ oj_revision }}"
+oj_tunnels_image: "online-judge-tunnels:{{ oj_revision }}"
+# Build the images even when that tag already exists locally.
+oj_force_rebuild: false
+
+# --- the checker service ------------------------------------------------------
+# The port the checker answers on, on the checker machine's own loopback. Docker
+# publishes it to 127.0.0.1 only, so nothing on that machine faces the internet.
+oj_checker_service_port: 8080
+# How many submissions one machine judges at once.
+oj_checker_capacity: 2
+oj_checker_log_level: INFO
+
+# --- the machines the app is told about ---------------------------------------
+# Jinja cannot build a list of dicts in one expression, so the list is written as
+# JSON text and read back. `oj_checker_machines` below is a real list, and it is
+# what both `CHECKER_MACHINES` and the tunnel list are rendered from - one source,
+# so the app and the tunnels can never disagree about a port.
+oj_checker_machines_json: >-
+  [
+  {% for host in groups['checkers'] | default([]) %}
+  {"name": {{ host | to_json }},
+   "address": {{ hostvars[host].ansible_host | to_json }},
+   "localPort": {{ hostvars[host].checker_local_port | int }}}{{ "," if not loop.last else "" }}
+  {% endfor %}
+  ]
+oj_checker_machines: "{{ oj_checker_machines_json | from_json }}"

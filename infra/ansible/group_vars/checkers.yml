@@ -1,0 +1,17 @@
+---
+# The checker machines only.
+
+oj_checker_container: online-judge-checker
+# Inside the container the service binds every address of the container's own
+# private namespace; Docker publishes that port on 127.0.0.1 of the machine and
+# nowhere else, so the only way in stays the SSH tunnel.
+oj_checker_bind: 0.0.0.0
+oj_checker_port: 8080
+oj_checker_scratch_path: /scratch
+oj_checker_packages_path: /problems
+oj_checker_result_ttl_seconds: 900
+oj_checker_shutdown_grace_seconds: 30
+
+# The application machine's own public key, read back from that machine by
+# `ensure-app-ssh-key` earlier in the same run.
+oj_app_public_key: "{{ hostvars[groups['application'] | first]['oj_app_public_key'] | default('') }}"

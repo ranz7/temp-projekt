@@ -1,0 +1,18 @@
+---
+# Capability: ensure-ops-layout
+# Problem: compose files, rendered env files, the source and the data need one
+# predictable tree. Everything this deployment owns lives under /opt/online-judge
+# and belongs to root.
+
+- name: Ensure the deployment directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ oj_ops_root }}"
+    - "{{ oj_src_dir }}"
+    - "{{ oj_compose_dir }}"
+    - "{{ oj_data_dir }}"

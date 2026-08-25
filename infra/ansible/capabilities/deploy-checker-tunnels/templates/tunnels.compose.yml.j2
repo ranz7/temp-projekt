@@ -1,0 +1,36 @@
+# Managed by Ansible capability deploy-checker-tunnels.
+#
+# Publishes nothing. The app finds this container by the name `tunnels` on the
+# `oj-tunnels` network and asks tunnels:9001, tunnels:9002 and so on; each of
+# those is one checker's own loopback port at the far end of an SSH connection
+# this container opened outwards.
+name: online-judge-tunnels
+
+services:
+  tunnels:
+    image: {{ oj_tunnels_image }}
+    container_name: {{ oj_tunnels_container }}
+    # Comes back after a drop by itself, and after a reboot with the daemon.
+    restart: unless-stopped
+    environment:
+      TUNNELS_RETRY_SECONDS: "{{ oj_tunnel_retry_seconds }}"
+    volumes:
+      - {{ oj_compose_dir }}/tunnels.conf:/etc/tunnels/tunnels.conf:ro
+      # The application machine's own key, generated on this machine and read by
+      # nothing else.
+      - {{ oj_app_key_path }}:/etc/tunnels/id_ed25519:ro
+      - {{ oj_known_hosts_path }}:/etc/tunnels/known_hosts:ro
+    networks:
+      tunnels:
+        aliases: [tunnels]
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/tunnels-health.sh"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+networks:
+  tunnels:
+    external: true
+    name: {{ oj_tunnels_network }}

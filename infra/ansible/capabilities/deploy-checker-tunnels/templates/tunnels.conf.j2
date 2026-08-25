@@ -1,0 +1,8 @@
+# Managed by Ansible capability deploy-checker-tunnels.
+# Rendered from the `checkers` group in infra/ansible/hosts.yml - the same list
+# the app is given as CHECKER_MACHINES, so a port can never mean two things.
+#
+# name  local_port  ssh_user  host  remote_port
+{% for machine in oj_checker_machines %}
+{{ machine.name }} {{ machine.localPort }} {{ hostvars[machine.name].ansible_user }} {{ machine.address }} {{ oj_checker_service_port }}
+{% endfor %}

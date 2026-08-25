@@ -1,0 +1,106 @@
+---
+# Scenario: check what this deployment would write, without touching a machine.
+#
+#   make check
+#
+# Renders the two files the inventory is the source of - the app's fleet list and
+# the tunnel list - and reads them back. Nothing here connects anywhere.
+
+- name: Check the fleet renders the way the app and the tunnels need it
+  hosts: control
+  become: false
+  gather_facts: false
+  any_errors_fatal: true
+
+  # The app's env file is rendered on the application machine, so this check
+  # needs that group's variables too. Real values, real render.
+  vars_files:
+    - ../group_vars/application.yml
+
+  vars:
+    oj_capabilities: "{{ inventory_dir }}/capabilities"
+    # The app's env file, rendered exactly as the deployment renders it.
+    oj_rendered_web_env: "{{ lookup('ansible.builtin.template', oj_capabilities ~ '/deploy-app-web/templates/web.env.j2') }}"
+    oj_rendered_tunnels: "{{ lookup('ansible.builtin.template', oj_capabilities ~ '/deploy-checker-tunnels/templates/tunnels.conf.j2') }}"
+    # The one CHECKER_MACHINES line, with its name stripped off.
+    oj_machines_line: >-
+      {{ oj_rendered_web_env.splitlines()
+         | select('match', '^CHECKER_MACHINES=')
+         | list | first | regex_replace('^CHECKER_MACHINES=', '') }}
+    oj_machines_read_back: "{{ oj_machines_line | from_json }}"
+    oj_tunnel_lines: >-
+      {{ oj_rendered_tunnels.splitlines()
+         | reject('match', '^\s*#')
+         | reject('match', '^\s*$') | list }}
+
+  tasks:
+    - name: The app is told about every machine in the inventory
+      ansible.builtin.assert:
+        that:
+          - oj_machines_read_back | length == groups['checkers'] | length
+          # The fleet this deployment was built for. Change the number here when
+          # the number of machines in hosts.yml changes.
+          - oj_machines_read_back | length == 13
+        fail_msg: >-
+          CHECKER_MACHINES renders {{ oj_machines_read_back | length }} machines,
+          the inventory lists {{ groups['checkers'] | length }}.
+        success_msg: "CHECKER_MACHINES is valid JSON with {{ oj_machines_read_back | length }} entries."
+
+    - name: Every entry names a machine, an address and a port of its own
+      ansible.builtin.assert:
+        that:
+          - oj_machines_read_back | map(attribute='localPort') | list | unique | length
+            == groups['checkers'] | length
+          - oj_machines_read_back | map(attribute='name') | list | unique | length
+            == groups['checkers'] | length
+          - oj_machines_read_back | map(attribute='address') | list | unique | length
+            == groups['checkers'] | length
+          - oj_machines_read_back | selectattr('localPort', 'lessthan', 1) | list | length == 0
+          - oj_machines_read_back | selectattr('localPort', 'greaterthan', 65535) | list | length == 0
+        fail_msg: "Two machines share a name, an address or a port."
+        success_msg: "{{ groups['checkers'] | length }} distinct names, addresses and ports."
+
+    - name: The whole value stays on one line, which is what an env file needs
+      ansible.builtin.assert:
+        that:
+          - oj_rendered_web_env.splitlines() | select('match', '^CHECKER_MACHINES=') | list | length == 1
+          - "'\n' not in oj_machines_line"
+        fail_msg: "CHECKER_MACHINES would be written over more than one line."
+
+    - name: The app is pointed at the tunnel container, not at a host address
+      ansible.builtin.assert:
+        that:
+          - "'CHECKER_TUNNEL_HOST=tunnels' in oj_rendered_web_env"
+        fail_msg: "The app must reach the checkers through the `tunnels` container."
+
+    - name: There is one tunnel per machine, on the same port the app was told
+      ansible.builtin.assert:
+        that:
+          - oj_tunnel_lines | length == groups['checkers'] | length
+          - oj_tunnel_lines | map('split') | map('first') | list | sort
+            == oj_machines_read_back | map(attribute='name') | list | sort
+          - oj_tunnel_lines | map('split') | map(attribute=1) | map('int') | list | sort
+            == oj_machines_read_back | map(attribute='localPort') | list | sort
+          - oj_tunnel_lines | map('split') | map(attribute=3) | list | sort
+            == oj_machines_read_back | map(attribute='address') | list | sort
+        fail_msg: >-
+          The tunnel list and CHECKER_MACHINES disagree. Both are rendered from
+          the `checkers` group in hosts.yml, so this means a template changed.
+        success_msg: "One tunnel per machine, matching what the app was told."
+
+    - name: Every tunnel names the SSH user that machine actually uses
+      ansible.builtin.assert:
+        that:
+          - oj_tunnel_lines | map('split') | map(attribute=2) | list | sort
+            == groups['checkers'] | map('extract', hostvars, 'ansible_user') | list | sort
+          - oj_tunnel_lines | map('split') | map(attribute=4) | map('int') | list | unique
+            == [oj_checker_service_port]
+        fail_msg: "A tunnel would connect as the wrong user or to the wrong port."
+
+    - name: Say what was checked
+      ansible.builtin.debug:
+        msg: >-
+          {{ oj_machines_read_back | length }} machines, ports
+          {{ oj_machines_read_back | map(attribute='localPort') | min }} to
+          {{ oj_machines_read_back | map(attribute='localPort') | max }}, each
+          forwarded to 127.0.0.1:{{ oj_checker_service_port }} on its own machine.
