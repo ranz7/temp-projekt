@@ -11,6 +11,10 @@ import {
   seedShippedPackages
 } from '@backend/modules/benchmark/__tests__/benchmark-fixture'
 import { waitForBenchmarkBatch } from '@backend/modules/benchmark/internal-functions/batch-runner'
+import {
+  findBenchmarkSolutionSet,
+  readBenchmarkSolutionPair
+} from '@backend/modules/benchmark/internal-functions/solutions'
 import { benchmark__batch_ } from '@backend/modules/benchmark/schema'
 import { submission__submission_ } from '@backend/modules/submission/schema'
 import { createCallerFactory, createTRPCContext } from '@backend/trpc'
@@ -108,9 +112,18 @@ describe('startBatch', () => {
     expect(submissions).toHaveLength(100)
     expect(correct.length).toBeGreaterThanOrEqual(60)
     expect(correct.length).toBeLessThanOrEqual(80)
-    // Two different files went out, not one file labelled two ways.
+    // Two different files went out, not one file labelled two ways, and each one is
+    // the shipped file itself rather than something built on the way.
+    const set = findBenchmarkSolutionSet(PYTHON_PROBLEM)
+    const shipped = set === null ? null : await readBenchmarkSolutionPair(set)
+
     expect(sources.size).toBe(2)
-    expect(correct.every(row => row.sourceCode.includes('Unbounded knapsack'))).toBe(true)
+    expect(correct.every(row => row.sourceCode === shipped?.correct)).toBe(true)
+    expect(
+      submissions
+        .filter(row => !row.expectsAccepted)
+        .every(row => row.sourceCode === shipped?.wrong)
+    ).toBe(true)
   })
 
   it('refuses a batch of none and a batch of more than five hundred', async () => {
