@@ -6,7 +6,11 @@ import { type FormEvent, useState } from 'react'
 import { z } from 'zod'
 import { useTRPC } from '@/app/_trpc/config'
 
-const USERNAME_PATTERN = '^[A-Za-z0-9_.-]+$'
+// The hyphen must be escaped: under the `v` (unicode-sets) flag Chrome
+// compiles `pattern` with, an unescaped `.` directly before `-` inside a
+// character class fails to parse and the browser silently drops inline
+// validation. Same characters accepted as before - letters, digits, `_`, `.`, `-`.
+const USERNAME_PATTERN = '^[A-Za-z0-9_.\\-]+$'
 const USERNAME_MAX_LENGTH = 64
 
 // A failed `input()` validation reaches the client as the JSON-stringified
