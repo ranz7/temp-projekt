@@ -3,9 +3,19 @@ import 'katex/dist/katex.css'
 import type { GetProblemOutputDTO } from '@backend/modules/task/endpoints/queries/get-problem/output.dto'
 import { Card } from '@/app/_components/card'
 import { DifficultyBadge } from './difficulty-badge'
-import { MathText } from './math-text'
 import { ProblemMeta } from './problem-meta'
 import { ProblemSamples } from './problem-samples'
+import { StatementMarkdown } from './statement-markdown'
+
+/**
+ * The backend is growing a single `statementMarkdown` document per problem
+ * (title, input, output, constraints and example in one Markdown body) to
+ * replace the four plain-text columns below. Until every problem carries
+ * one, the DTO stays as `GetProblemOutputDTO` and this optional field is
+ * read defensively, so today's four-section layout keeps working unchanged
+ * for a problem that has not been migrated yet.
+ */
+type ProblemWithStatementMarkdown = GetProblemOutputDTO & { statementMarkdown?: string | null }
 
 function StatementSection({ title, text }: { title: string; text: string | null }) {
   if (text === null || text.length === 0) {
@@ -15,13 +25,13 @@ function StatementSection({ title, text }: { title: string; text: string | null 
   return (
     <section className='flex flex-col gap-2'>
       <h2 className='font-semibold text-sm'>{title}</h2>
-      <MathText text={text} className='text-sm leading-relaxed' />
+      <StatementMarkdown text={text} />
     </section>
   )
 }
 
 /** Left column: code, title, tags, limits and the full statement with samples. */
-export function ProblemStatement({ problem }: { problem: GetProblemOutputDTO }) {
+export function ProblemStatement({ problem }: { problem: ProblemWithStatementMarkdown }) {
   return (
     <Card className='gap-6'>
       <div className='flex flex-col gap-3'>
@@ -52,10 +62,18 @@ export function ProblemStatement({ problem }: { problem: GetProblemOutputDTO }) 
         />
       </div>
 
-      <StatementSection title='Statement' text={problem.statement} />
-      <StatementSection title='Input' text={problem.statementInput} />
-      <StatementSection title='Output' text={problem.statementOutput} />
-      <StatementSection title='Notes' text={problem.statementNotes} />
+      {problem.statementMarkdown !== undefined &&
+      problem.statementMarkdown !== null &&
+      problem.statementMarkdown.length > 0 ? (
+        <StatementMarkdown text={problem.statementMarkdown} />
+      ) : (
+        <>
+          <StatementSection title='Statement' text={problem.statement} />
+          <StatementSection title='Input' text={problem.statementInput} />
+          <StatementSection title='Output' text={problem.statementOutput} />
+          <StatementSection title='Notes' text={problem.statementNotes} />
+        </>
+      )}
 
       <section className='flex flex-col gap-3'>
         <h2 className='font-semibold text-sm'>Samples</h2>

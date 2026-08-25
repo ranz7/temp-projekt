@@ -1,6 +1,6 @@
 import type { ProblemSampleDTO } from '@backend/modules/task/endpoints/queries/get-problem/output.dto'
 import { EmptyState } from '@/app/_components/empty-state'
-import { MathText } from './math-text'
+import { StatementMarkdown } from './statement-markdown'
 
 function SampleBlock({ sample, index }: { sample: ProblemSampleDTO; index: number }) {
   return (
@@ -19,7 +19,7 @@ function SampleBlock({ sample, index }: { sample: ProblemSampleDTO; index: numbe
         </div>
       </div>
       {sample.explanation !== null ? (
-        <MathText text={sample.explanation} className='text-muted text-sm' />
+        <StatementMarkdown text={sample.explanation} className='text-muted' />
       ) : null}
     </div>
   )
