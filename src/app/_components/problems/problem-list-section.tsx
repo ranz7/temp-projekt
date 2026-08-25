@@ -2,7 +2,8 @@
 
 import type { ListProblemsInputDTO } from '@backend/modules/task/endpoints/queries/list-problems/input.dto'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { cn } from '@/app/_components/cn'
 import { EmptyState } from '@/app/_components/empty-state'
 import { ErrorState } from '@/app/_components/error-state'
@@ -17,11 +18,26 @@ import { useProblemFacets } from './use-problem-facets'
 /** The problem list: search, filters, sort, paging and results, all driven by the URL. */
 export function ProblemListSection() {
   const trpc = useTRPC()
-  const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  const params = parseProblemListParams(Object.fromEntries(searchParams.entries()))
+  // Seeded once from the URL Next.js resolved for this render (matches the
+  // server's prefetch exactly). From here on this component's own state - not
+  // `useSearchParams()` - drives the query and the address bar: every result
+  // on this page already comes from this client query, so a filter change
+  // only needs a new tRPC call, never a full server re-render of the page
+  // (which would needlessly redo the activity panel's own database reads too).
+  const [params, setParams] = useState<ListProblemsInputDTO>(() =>
+    parseProblemListParams(Object.fromEntries(searchParams.entries()))
+  )
+
+  // The one case this component doesn't drive itself: the back/forward
+  // buttons change the URL outside of `setParamsAndUrl` below, so resync from
+  // whatever Next.js resolved for that real navigation.
+  useEffect(() => {
+    setParams(parseProblemListParams(Object.fromEntries(searchParams.entries())))
+  }, [searchParams])
+
   const facets = useProblemFacets()
 
   const listQuery = useQuery({
@@ -29,21 +45,28 @@ export function ProblemListSection() {
     placeholderData: keepPreviousData
   })
 
-  function navigate(next: ListProblemsInputDTO) {
+  // Updates local state immediately (so the query and the table redraw right
+  // away) and syncs the address bar via the raw History API - not
+  // `router.push` - so this stays a shareable, reload-safe URL without asking
+  // the server to re-render the whole page for what is otherwise a pure
+  // client-side re-fetch.
+  function setParamsAndUrl(next: ListProblemsInputDTO) {
+    setParams(next)
     const query = buildProblemListSearchParams(next).toString()
-    router.push(query.length > 0 ? `${pathname}?${query}` : pathname, { scroll: false })
+    const url = query.length > 0 ? `${pathname}?${query}` : pathname
+    window.history.pushState(null, '', url)
   }
 
   function updateFilters(partial: Partial<Omit<ListProblemsInputDTO, 'page'>>) {
-    navigate({ ...params, ...partial, page: 1 })
+    setParamsAndUrl({ ...params, ...partial, page: 1 })
   }
 
   function setPage(page: number) {
-    navigate({ ...params, page })
+    setParamsAndUrl({ ...params, page })
   }
 
   function clearFilters() {
-    navigate({
+    setParamsAndUrl({
       ...params,
       search: undefined,
       difficulty: undefined,

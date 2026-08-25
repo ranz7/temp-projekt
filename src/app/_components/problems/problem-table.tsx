@@ -20,13 +20,11 @@ export function ProblemTable({ problems }: { problems: ProblemListItemDTO[] }) {
       <tbody>
         {problems.map(problem => (
           <tr key={problem.id} className='border-border border-b last:border-0'>
-            <td className='px-3 py-2 font-mono text-xs'>
-              <Link href={`/problems/${problem.slug}`} className='text-accent hover:underline'>
-                {problem.code}
-              </Link>
-            </td>
+            <td className='px-3 py-2 font-mono text-xs text-muted'>{problem.code}</td>
             <td className='px-3 py-2'>
-              <Link href={`/problems/${problem.slug}`} className='hover:underline'>
+              {/* One link per row, not one per cell - a second <Link> to the same
+                  href doubles that route's prefetch traffic for no benefit. */}
+              <Link href={`/problems/${problem.slug}`} className='text-accent hover:underline'>
                 {problem.title}
               </Link>
             </td>
