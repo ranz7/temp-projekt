@@ -15,7 +15,7 @@ export function SiteHeader() {
   return (
     <header className='sticky top-0 z-40 border-border/80 border-b bg-card/90 backdrop-blur'>
       <div className='mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6'>
-        <div className='flex flex-wrap items-center gap-8'>
+        <div className='flex min-w-0 flex-wrap items-center gap-x-8 gap-y-2'>
           <Link
             href='/'
             className='flex items-center gap-2 font-semibold tracking-tight'

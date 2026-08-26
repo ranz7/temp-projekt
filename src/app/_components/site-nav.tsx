@@ -15,7 +15,7 @@ const LINKS = [
  */
 export function SiteNav() {
   return (
-    <nav className='flex items-center gap-1 font-medium text-sm'>
+    <nav className='flex flex-wrap items-center gap-1 font-medium text-sm'>
       {LINKS.map(link => (
         <Link
           key={link.href}

@@ -16,7 +16,7 @@ export default function HomeLoading() {
       </header>
 
       <div className='grid gap-6 lg:grid-cols-5'>
-        <div className='lg:col-span-3'>
+        <div className='min-w-0 lg:col-span-3'>
           <Card title='Latest submissions' subtitle='Recent judge queue activity'>
             <div className='divide-y divide-divider'>
               {SUBMISSION_KEYS.map(key => (
@@ -29,7 +29,7 @@ export default function HomeLoading() {
             </div>
           </Card>
         </div>
-        <div className='lg:col-span-2'>
+        <div className='min-w-0 lg:col-span-2'>
           <Card title='Proposed problems' subtitle='Tasks to try'>
             <div className='divide-y divide-divider'>
               {PROBLEM_KEYS.map(key => (

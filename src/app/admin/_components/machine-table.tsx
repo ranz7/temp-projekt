@@ -26,7 +26,7 @@ export function MachineTable({ machines }: MachineTableProps) {
   }
 
   return (
-    <div className='card'>
+    <div className='card min-w-0'>
       <DataTable>
         <thead>
           <tr>

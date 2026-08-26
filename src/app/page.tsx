@@ -19,10 +19,10 @@ export default async function HomePage() {
       </header>
 
       <div className='grid gap-6 lg:grid-cols-5'>
-        <div className='lg:col-span-3'>
+        <div className='min-w-0 lg:col-span-3'>
           <LatestSubmissions />
         </div>
-        <div className='lg:col-span-2'>
+        <div className='min-w-0 lg:col-span-2'>
           <ProposedProblems problems={problems.slice(0, PROPOSED_PROBLEMS_LIMIT)} />
         </div>
       </div>
