@@ -151,6 +151,13 @@ export const benchmark__scaling_step_ = pgTable(
     run_id_: uuid().notNull(),
     batch_id_: uuid(),
     machine_count_: integer().notNull(),
+    // While the step runs it is asked, again and again, how many judging slots the
+    // working machines actually had filled. Their sum and the number of asks are what
+    // turn into "five of sixteen slots busy" - the number that says whether another
+    // machine would help at all.
+    busy_samples_: integer().notNull().default(0),
+    busy_total_: integer().notNull().default(0),
+    capacity_total_: integer().notNull().default(0),
     started_at_: timestamp({ withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     ended_at_: timestamp({ withTimezone: true, mode: 'date' })
   },

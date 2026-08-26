@@ -27,6 +27,7 @@ export function ScalingStepsTable({ steps, currentMachineCount }: ScalingStepsTa
           <th className='th'>Took</th>
           <th className='th'>Per minute</th>
           <th className='th'>Per machine</th>
+          <th className='th'>Slots busy</th>
           <th className='th'>Against one machine</th>
         </tr>
       </thead>
@@ -66,6 +67,15 @@ export function ScalingStepsTable({ steps, currentMachineCount }: ScalingStepsTa
               </td>
               <td className='td text-muted'>
                 {step.perMinute === null ? '-' : formatRate(step.perMinute / step.machineCount)}
+              </td>
+              <td className='td text-muted'>
+                {step.slotsBusy === null || step.slotsTotal === null ? (
+                  '-'
+                ) : (
+                  <>
+                    {formatRate(step.slotsBusy)} of {step.slotsTotal}
+                  </>
+                )}
               </td>
               <td className='td'>
                 {speedUp === null ? (

@@ -15,6 +15,9 @@ export const ScalingStepDTOZ = z.object({
   wallMs: z.number().int().nullable(),
   /** Solutions finished per minute across the whole step. Null until it ends. */
   perMinute: z.number().nullable(),
+  /** Judging slots filled on average while the step ran, and how many there were. */
+  slotsBusy: z.number().nullable(),
+  slotsTotal: z.number().nullable(),
   isFinished: z.boolean()
 })
 

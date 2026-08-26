@@ -77,8 +77,40 @@ async function keepOnlyFirst(
   }
 }
 
+/**
+ * Asks the working machines how many of their judging slots are filled right now, and
+ * adds the answer to the step's running total. Sampled rather than derived, because
+ * the only honest way to know whether another machine would help is to look at
+ * whether the ones already there are busy.
+ */
+async function sampleSaturation(database: Database, stepId: string): Promise<void> {
+  const [slots] = await database
+    .select({
+      busy: sql<number>`coalesce(sum(${machine__machine_.busy_}), 0)::int`,
+      capacity: sql<number>`coalesce(sum(${machine__machine_.capacity_}), 0)::int`
+    })
+    .from(machine__machine_)
+    .where(and(eq(machine__machine_.enabled_, true), eq(machine__machine_.reachable_, true)))
+
+  if (slots === undefined) return
+
+  await database
+    .update(benchmark__scaling_step_)
+    .set({
+      busy_samples_: sql`${benchmark__scaling_step_.busy_samples_} + 1`,
+      busy_total_: sql`${benchmark__scaling_step_.busy_total_} + ${slots.busy}`,
+      capacity_total_: sql`${benchmark__scaling_step_.capacity_total_} + ${slots.capacity}`
+    })
+    .where(eq(benchmark__scaling_step_.id, stepId))
+}
+
 /** Waits until every solution of a step has a verdict, or gives up and says so. */
-async function waitForStep(database: Database, runId: string, batchId: string): Promise<void> {
+async function waitForStep(
+  database: Database,
+  runId: string,
+  batchId: string,
+  stepId: string
+): Promise<void> {
   const startedAt = Date.now()
 
   while (true) {
@@ -97,6 +129,8 @@ async function waitForStep(database: Database, runId: string, batchId: string): 
       )
 
     if ((pending?.count ?? 0) === 0) return
+
+    await sampleSaturation(database, stepId)
 
     if (!(await isStillRunning(database, runId))) return
 
@@ -177,7 +211,7 @@ export async function runScalingRun(runId: string, database: Database = db): Pro
         .where(eq(benchmark__scaling_step_.id, step.id))
 
       await runBenchmarkBatch(batch.id, database)
-      await waitForStep(database, runId, batch.id)
+      await waitForStep(database, runId, batch.id, step.id)
 
       await database
         .update(benchmark__scaling_step_)

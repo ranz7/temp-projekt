@@ -216,6 +216,24 @@ describe('measuring what another machine buys', () => {
     ])
   })
 
+  it('records how busy the machines were, so a flat curve explains itself', async () => {
+    await insertTestMachine({ name: 'checker-a', localPort: 9001 })
+
+    const caller = await panel()
+    await caller.benchmark.startScalingRun({ problemSlug: PROBLEM, submissionsPerStep: 4 })
+
+    await judgeUntilRunEnds()
+    await waitForScalingRun()
+
+    const { run } = await caller.benchmark.getScalingRun()
+    const step = run?.steps[0]
+
+    // Nothing judges in this test, so no slot is ever busy - but the machine's
+    // capacity was still asked for and recorded, which is the part that must work.
+    expect(step?.slotsBusy).not.toBeNull()
+    expect(step?.slotsTotal).not.toBeNull()
+  })
+
   it('records which machines each rung used', async () => {
     await insertTestMachine({ name: 'checker-a', localPort: 9001 })
     await insertTestMachine({ name: 'checker-b', localPort: 9002 })

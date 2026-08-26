@@ -55,6 +55,9 @@ export const getScalingRunProcedure = publicProcedure
       .select({
         machineCount: benchmark__scaling_step_.machine_count_,
         endedAt: benchmark__scaling_step_.ended_at_,
+        busySamples: benchmark__scaling_step_.busy_samples_,
+        busyTotal: benchmark__scaling_step_.busy_total_,
+        capacityTotal: benchmark__scaling_step_.capacity_total_,
         sent: sql<number>`count(${submission__submission_.id})::int`,
         finished: sql<number>`count(*) filter (
           where ${submission__submission_.status_} is not null
@@ -76,7 +79,14 @@ export const getScalingRunProcedure = publicProcedure
         eq(submission__submission_.id, benchmark__batch_submission_.submission_id_)
       )
       .where(eq(benchmark__scaling_step_.run_id_, run.id))
-      .groupBy(benchmark__scaling_step_.id, benchmark__scaling_step_.machine_count_)
+      .groupBy(
+        benchmark__scaling_step_.id,
+        benchmark__scaling_step_.machine_count_,
+        benchmark__scaling_step_.ended_at_,
+        benchmark__scaling_step_.busy_samples_,
+        benchmark__scaling_step_.busy_total_,
+        benchmark__scaling_step_.capacity_total_
+      )
       .orderBy(asc(benchmark__scaling_step_.machine_count_))
 
     const steps: ScalingStepDTO[] = rows.map(row => {
@@ -88,6 +98,8 @@ export const getScalingRunProcedure = publicProcedure
       const wallMs =
         isFinished && first !== null && last !== null ? Math.max(last - first, 1) : null
 
+      const hasSamples = row.busySamples > 0
+
       return {
         machineCount: row.machineCount,
         requested: run.submissionsPerStep,
@@ -96,6 +108,8 @@ export const getScalingRunProcedure = publicProcedure
         accepted: row.accepted,
         wallMs,
         perMinute: wallMs === null ? null : (row.finished * MILLISECONDS_PER_MINUTE) / wallMs,
+        slotsBusy: hasSamples ? row.busyTotal / row.busySamples : null,
+        slotsTotal: hasSamples ? Math.round(row.capacityTotal / row.busySamples) : null,
         isFinished
       }
     })

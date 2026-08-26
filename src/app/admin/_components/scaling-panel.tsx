@@ -89,14 +89,31 @@ export function ScalingPanel({ run, problems, machinesAnswering }: ScalingPanelP
               </p>
             </div>
 
-            {speedUp !== null ? (
-              <div className='flex flex-col gap-1'>
-                <p className='text-muted text-xs uppercase tracking-wide'>Against one machine</p>
-                <p className='font-bold text-3xl text-status-green tabular-nums sm:text-4xl'>
-                  x<AnimatedNumber value={speedUp} format={value => value.toFixed(2)} />
-                </p>
-              </div>
-            ) : null}
+            <div className='flex flex-wrap gap-8'>
+              {speedUp !== null ? (
+                <div className='flex flex-col gap-1'>
+                  <p className='text-muted text-xs uppercase tracking-wide'>Against one machine</p>
+                  <p className='font-bold text-3xl text-status-green tabular-nums sm:text-4xl'>
+                    x<AnimatedNumber value={speedUp} format={value => value.toFixed(2)} />
+                  </p>
+                </div>
+              ) : null}
+
+              {/* Whether the machines are actually busy says, better than the curve
+                  alone, whether another machine would buy anything at all. */}
+              {latest?.slotsBusy != null && latest.slotsTotal != null ? (
+                <div className='flex flex-col gap-1'>
+                  <p className='text-muted text-xs uppercase tracking-wide'>Judging slots busy</p>
+                  <p className='font-bold text-3xl text-foreground tabular-nums sm:text-4xl'>
+                    <AnimatedNumber value={latest.slotsBusy} format={formatRate} />
+                    <span className='font-normal text-base text-muted sm:text-lg'>
+                      {' '}
+                      of {latest.slotsTotal}
+                    </span>
+                  </p>
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <div className='flex flex-col gap-2'>
