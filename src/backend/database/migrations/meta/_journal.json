@@ -50,6 +50,13 @@
       "when": 1787690219335,
       "tag": "0006__benchmark__create__batch",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787704843964,
+      "tag": "0007__benchmark__create__scaling_run",
+      "breakpoints": true
     }
   ]
 }

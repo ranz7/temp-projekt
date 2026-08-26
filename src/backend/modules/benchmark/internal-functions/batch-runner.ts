@@ -9,14 +9,19 @@ import { findBenchmarkSolutionSet, readBenchmarkSolutionPair } from './solutions
 
 /** Seven in ten of a batch are the correct solution, the rest the wrong one. */
 export const BENCHMARK_CORRECT_SHARE = 0.7
+export const BENCHMARK_CORRECT_PERCENT = Math.round(BENCHMARK_CORRECT_SHARE * 100)
 
 /**
- * Which solution each submission of a batch carries: as close to seven in ten correct
- * as the count allows, then shuffled, so the verdicts land mixed rather than in two
- * blocks and a stopped batch still holds roughly the same mixture.
+ * Which solution each submission of a batch carries: as close to the asked-for share
+ * of correct ones as the count allows, then shuffled, so the verdicts land mixed
+ * rather than in two blocks and a stopped batch still holds roughly the same mixture.
+ * A batch that is all correct stays all correct - nothing to shuffle.
  */
-export function buildBatchDeck(count: number): boolean[] {
-  const correctCount = Math.round(count * BENCHMARK_CORRECT_SHARE)
+export function buildBatchDeck(
+  count: number,
+  correctPercent: number = BENCHMARK_CORRECT_PERCENT
+): boolean[] {
+  const correctCount = Math.round((count * correctPercent) / 100)
   const deck = Array.from({ length: count }, (_, index) => index < correctCount)
 
   for (let index = deck.length - 1; index > 0; index -= 1) {
@@ -49,7 +54,8 @@ export async function runBenchmarkBatch(batchId: string, database: Database = db
       problemId: benchmark__batch_.problem_id_,
       problemSlug: task__problem_.slug_,
       language: benchmark__batch_.language_,
-      requestedCount: benchmark__batch_.requested_count_
+      requestedCount: benchmark__batch_.requested_count_,
+      correctPercent: benchmark__batch_.correct_percent_
     })
     .from(benchmark__batch_)
     .innerJoin(task__problem_, eq(task__problem_.id, benchmark__batch_.problem_id_))
@@ -66,8 +72,10 @@ export async function runBenchmarkBatch(batchId: string, database: Database = db
 
   const sources = await readBenchmarkSolutionPair(solutionSet)
   const authorId = await resolveBenchmarkAuthorId(database)
-  const deck = buildBatchDeck(batch.requestedCount)
-  const intervalMs = getBenchmarkSubmissionIntervalMs()
+  const deck = buildBatchDeck(batch.requestedCount, batch.correctPercent)
+  // A batch of nothing but correct solutions is a measurement, so it goes out as fast
+  // as the queue takes it rather than at the panel's demonstration pace.
+  const intervalMs = batch.correctPercent >= 100 ? 0 : getBenchmarkSubmissionIntervalMs()
 
   for (const [index, isCorrect] of deck.entries()) {
     if (index > 0 && intervalMs > 0) {

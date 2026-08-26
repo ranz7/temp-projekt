@@ -6,6 +6,7 @@ import { useTRPC } from '@/app/_trpc/config'
 import { BatchPanel, type ProblemOption } from './batch-panel'
 import { FleetSummary } from './fleet-summary'
 import { MachineTable } from './machine-table'
+import { ScalingPanel } from './scaling-panel'
 import { ThroughputChart } from './throughput-chart'
 import { useIsTabVisible } from './use-is-tab-visible'
 
@@ -50,6 +51,17 @@ export function AdminPanel({ problems }: AdminPanelProps) {
     refetchInterval: sharedRefetchInterval
   })
 
+  const scalingQuery = useQuery({
+    ...trpc.benchmark.getScalingRun.queryOptions(),
+    // A run climbs a rung at a time, so the panel watches it closely while it goes.
+    refetchInterval: query =>
+      isVisible
+        ? query.state.data?.run?.status === 'running'
+          ? FAST_POLL_MS
+          : CALM_POLL_MS
+        : false
+  })
+
   if (machinesQuery.isError || throughputQuery.isError || batchQuery.isError) {
     return <ErrorState description='The panel could not load its data. Try refreshing.' />
   }
@@ -59,6 +71,12 @@ export function AdminPanel({ problems }: AdminPanelProps) {
   return (
     <div className='flex min-w-0 flex-col gap-6'>
       <FleetSummary machines={machines} />
+
+      <ScalingPanel
+        run={scalingQuery.data?.run ?? null}
+        problems={problems}
+        machinesAnswering={machines.filter(machine => machine.reachable).length}
+      />
 
       {throughputQuery.data !== undefined ? (
         <ThroughputChart throughput={throughputQuery.data} />

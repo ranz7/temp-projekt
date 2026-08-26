@@ -1,5 +1,6 @@
 import { launchBenchmarkBatch } from '@backend/modules/benchmark/internal-functions/batch-runner'
 import { findBenchmarkSolutionSet } from '@backend/modules/benchmark/internal-functions/solutions'
+import { violatesUniqueIndex } from '@backend/modules/benchmark/internal-functions/unique-violation'
 import { benchmark__batch_ } from '@backend/modules/benchmark/schema'
 import { task__problem_ } from '@backend/modules/task/schema'
 import { publicProcedure } from '@backend/trpc'
@@ -12,7 +13,7 @@ import { StartBatchOutputDTOZ } from './output.dto'
 const SINGLE_RUNNING_INDEX = 'benchmark__batch__single_running__unique_idx_'
 
 function isSecondRunningBatch(error: unknown): boolean {
-  return error instanceof Error && error.message.includes(SINGLE_RUNNING_INDEX)
+  return violatesUniqueIndex(error, SINGLE_RUNNING_INDEX)
 }
 
 /**

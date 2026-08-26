@@ -62,7 +62,11 @@ export function MachineTable({ machines }: MachineTableProps) {
                 </td>
                 <td className='td tabular-nums'>{formatCount(machine.judgingNow)}</td>
                 <td className='td tabular-nums'>{formatCount(machine.judgedTotal)}</td>
-                <td className='td text-muted'>{formatRelativeToNow(machine.lastSeenAt)}</td>
+                {/* Rendered on the server, then again a moment later in the browser, so
+                  "7s ago" legitimately becomes "8s ago" between the two. */}
+                <td className='td text-muted' suppressHydrationWarning>
+                  {formatRelativeToNow(machine.lastSeenAt)}
+                </td>
                 <td className='td'>
                   <MachineToggle machineId={machine.id} enabled={machine.enabled} />
                 </td>
