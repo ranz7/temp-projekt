@@ -1,0 +1,41 @@
+---
+# The application machine only.
+
+# Docker networks. Two of them are internal: nothing on them reaches the
+# internet and nothing on the internet reaches them.
+oj_edge_network: oj-edge          # proxy to the internet, for ACME and visitors
+oj_ingress_network: oj-ingress    # proxy to app, internal
+oj_db_network: oj-db              # app to Postgres, internal
+oj_tunnels_network: oj-tunnels    # app to the tunnels; the tunnels need SSH out
+
+# Container names. The app addresses `postgres` and `tunnels` by these aliases,
+# so it never needs host networking and never learns a host address.
+oj_postgres_container: online-judge-postgres
+oj_web_container: online-judge-web
+# The loop runner: the same image as the app, running the loop that hands
+# submissions to the machines and writes back what they answer.
+oj_loop_runner_container: online-judge-loop-runner
+oj_tunnels_container: online-judge-tunnels
+oj_proxy_container: online-judge-proxy
+
+oj_postgres_user: online_judge
+oj_postgres_db: online_judge
+# Reached over the internal `oj-db` network by the alias `postgres`.
+oj_database_url: "postgres://{{ oj_postgres_user }}:{{ oj_postgres_password }}@postgres:5432/{{ oj_postgres_db }}"
+
+# The dedicated keypair the application machine uses to reach the checkers. It
+# is generated on the machine on the first run and never leaves it; the operator's
+# own key is never copied anywhere.
+oj_app_key_path: "{{ oj_ssh_dir }}/id_ed25519"
+oj_known_hosts_path: "{{ oj_ssh_dir }}/known_hosts"
+
+# How long a tunnel waits before dialling again after a drop, in seconds.
+oj_tunnel_retry_seconds: 5
+
+# App tunables, all with the same meaning as in the repository-root `.env.example`.
+oj_checker_request_timeout_seconds: 10
+oj_checker_health_seconds: 5
+oj_checker_dispatch_seconds: 1
+oj_checker_result_seconds: 2
+oj_submission_lease_seconds: 120
+oj_submission_max_attempts: 3

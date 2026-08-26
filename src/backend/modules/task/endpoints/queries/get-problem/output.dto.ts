@@ -19,6 +19,8 @@ export const GetProblemOutputDTOZ = z.object({
   code: z.string(),
   title: z.string(),
   statement: z.string(),
+  /** The whole statement as Markdown. Null for a problem seeded without one. */
+  statementMarkdown: z.string().nullable(),
   statementInput: z.string().nullable(),
   statementOutput: z.string().nullable(),
   statementNotes: z.string().nullable(),

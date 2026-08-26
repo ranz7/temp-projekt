@@ -1,21 +1,24 @@
-# The sandboxed checker: it runs Python submissions itself, inside bubblewrap,
-# with cgroup v2 caps on memory and process count.
+# One checker machine, as an image.
 #
-# Problem packages are never baked in. Every replica mounts the same read-only
-# directory, so any replica can judge any problem.
+# It runs the HTTP service in `checkers/common`: the app asks it to judge a
+# submission and asks it for the answer. It never calls the app and never fetches
+# work by itself. The judge behind the service's seam is `checkers/bwrap`, which
+# runs a submission inside bubblewrap with cgroup v2 caps on memory and process
+# count.
+#
+# Problem packages are never baked in. Every container mounts a read-only
+# directory instead, so no contest data lives in any image layer.
 
-FROM python:3.13-slim-trixie
+FROM python:3.13.14-slim-trixie
 
-# bubblewrap is the sandbox; nothing else is installed, so a submission finds
-# no compiler, no shell tooling and no network client to reach for.
+# bubblewrap is the sandbox, g++ compiles C++ submissions - our own checkers now
+# do that. Nothing else is installed, so a submission finds no network client and
+# no shell tooling to reach for.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends bubblewrap \
+ && apt-get install -y --no-install-recommends bubblewrap g++ \
  && rm -rf /var/lib/apt/lists/*
 
-# The only dependency: the Redis client used for wake-ups. Without Redis the
-# worker polls instead, so this is a latency dependency, not a hard one.
-RUN pip install --no-cache-dir "redis==8.1.0"
-
+# The service and its judge need nothing third-party, so nothing is installed.
 WORKDIR /app
 COPY checkers/common ./common
 COPY checkers/bwrap ./bwrap
@@ -30,20 +33,23 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHON_PATH=/usr/local/bin/python3
 ENV BWRAP_PATH=/usr/bin/bwrap
-ENV CHECKER_HEALTH_PORT=8080
+ENV CHECKER_PORT=8080
 ENV CHECKER_SCRATCH_PATH=/scratch
 ENV PROBLEM_PACKAGES_PATH=/problems
+ENV CHECKER_JUDGE=bwrap:run_judge
 
 # One job at a time writes here and the directory is emptied when the job ends.
-# A volume per replica, so scaling never makes two workers share a workspace.
+# A volume of its own, so a job's files never touch the image layer.
 RUN mkdir -p /scratch
 VOLUME ["/scratch"]
 
 EXPOSE 8080
 
+# Asks the service's own /health and passes only when it really answers: 200,
+# contract version 2, and the machine saying it is healthy.
 HEALTHCHECK --interval=5s --timeout=5s --start-period=15s --retries=3 \
-  CMD python3 -c "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ['CHECKER_HEALTH_PORT'] + '/health', timeout=3)" || exit 1
+  CMD python3 -c "import json,os,urllib.request; port=os.environ.get('CHECKER_PORT') or '8080'; body=json.load(urllib.request.urlopen('http://127.0.0.1:' + port + '/health', timeout=3)); raise SystemExit(0 if body.get('ok') and body.get('contractVersion') == 2 else 1)" || exit 1
 
-# The script execs the worker, so Python is PID 1 and SIGTERM reaches its own
+# The script execs the service, so Python is PID 1 and SIGTERM reaches its own
 # handler rather than a shell that would swallow it.
 ENTRYPOINT ["/usr/local/bin/entrypoint-bwrap.sh"]

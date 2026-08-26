@@ -68,7 +68,9 @@ class BwrapArgvTests(unittest.TestCase):
         self.assertIn("--unshare-pid", argv)
         self.assertIn("--clearenv", argv)
         self.assertIn("--die-with-parent", argv)
-        self.assertIn("--new-session", argv)
+        # No `--new-session`: the run already has a session of its own with no
+        # terminal, and the flag would split it into two process groups.
+        self.assertNotIn("--new-session", argv)
         # Exactly one read-write bind, and it is the job's own directory.
         self.assertEqual(argv.count("--bind"), 1)
         self.assertEqual(argv[argv.index("--bind") + 1], str(work))
@@ -147,7 +149,9 @@ class RunInsideTheSandboxTests(unittest.TestCase):
             process = spawn_sandboxed(
                 SpawnSpec(
                     work_dir=work,
-                    run_argv=["/usr/bin/python3", str(source)],
+                    # The interpreter running the tests: an image need not have
+                    # one at /usr/bin/python3, and the run has to really start.
+                    run_argv=[sys.executable, str(source)],
                     stdout_path=produced,
                     sandbox="bwrap",
                 )

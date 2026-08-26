@@ -48,7 +48,7 @@ export const logInProcedure = publicProcedure
       throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Could not sign you in.' })
     }
 
-    setSessionCookie(ctx.resHeaders, user.id)
+    setSessionCookie(ctx.resHeaders, user.id, ctx.isSecureConnection)
 
     return user
   })

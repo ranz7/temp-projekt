@@ -1,0 +1,55 @@
+{
+  "id": "combo",
+  "slug": "combo",
+  "code": "IOI18C",
+  "title": "Combo",
+  "difficulty": "hard",
+  "rating": 2200,
+  "tags": ["interactive", "binary search", "constructive"],
+  "kind": "interactive",
+  "languages": ["cpp"],
+  "limits": {
+    "timeLimitMs": 2000,
+    "memoryLimitMb": 256
+  },
+  "io": {
+    "mode": "interactive",
+    "inputFile": null,
+    "outputFile": null
+  },
+  "statement": {
+    "description": "Determine a secret button sequence by querying the longest prefix that occurs as a contiguous substring of a chosen string.",
+    "input": null,
+    "output": null,
+    "interaction": "Implement guess_sequence(int N), call press(string p) as needed, and return the exact secret sequence.",
+    "notes": "The first button of the secret sequence does not occur again."
+  },
+  "samples": [
+    {
+      "input": "ABXYY"
+    }
+  ],
+  "checker": {
+    "type": "grader"
+  },
+  "grader": {
+    "language": "cpp",
+    "sources": ["grader/grader.cpp"],
+    "headers": ["grader/combo.h"],
+    "submissionFileName": "combo.cpp"
+  },
+  "interactor": null,
+  "modelSolutions": [],
+  "tests": {
+    "dir": "tests",
+    "count": 68,
+    "publicCount": 1,
+    "complete": true
+  },
+  "submission": {
+    "type": "source",
+    "allowedExtensions": [".cpp", ".cc"]
+  },
+  "solvedCount": 0,
+  "executable": true
+}

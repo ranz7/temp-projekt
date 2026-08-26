@@ -1,0 +1,282 @@
+---
+# Scenario: set up the whole system - the application machine and every checker.
+#
+#   make deploy
+#
+# Safe to run again at any time. It changes only what differs: the same commit
+# builds no image and recreates no container, so a machine that is judging
+# submissions is left judging them.
+
+- name: Check the deployment can go ahead, and pack the source
+  hosts: control
+  become: false
+  gather_facts: false
+  any_errors_fatal: true
+
+  pre_tasks:
+    - name: Look for the file the secrets come from
+      ansible.builtin.stat:
+        path: "{{ oj_deploy_env_file }}"
+      register: oj_deploy_env_present
+
+    - name: Refuse to start without it
+      ansible.builtin.assert:
+        that:
+          - oj_deploy_env_present.stat.exists
+        fail_msg: >-
+          {{ oj_deploy_env_file }} does not exist. Copy
+          infra/ansible/deploy.env.example to it and fill it in. It is
+          gitignored, and it is the only place a real secret lives.
+
+    - name: Refuse to start with a secret missing
+      ansible.builtin.assert:
+        that:
+          - oj_service_key | length >= 16
+          - oj_postgres_password | length >= 16
+          - oj_session_secret | length >= 16
+        fail_msg: >-
+          OJ_SERVICE_KEY, OJ_POSTGRES_PASSWORD and OJ_SESSION_SECRET must each be
+          set in {{ oj_deploy_env_file }} and at least 16 characters long.
+          `openssl rand -hex 32` makes a good one.
+
+    - name: Refuse a domain with no contact address
+      ansible.builtin.assert:
+        that:
+          - oj_acme_email | length > 0
+        fail_msg: >-
+          OJ_DOMAIN is set to "{{ oj_domain }}", so OJ_ACME_EMAIL must be set too:
+          Let's Encrypt writes there about an expiring certificate.
+      when: oj_domain | length > 0
+
+    - name: Refuse an inventory that cannot be deployed
+      ansible.builtin.assert:
+        that:
+          - groups['application'] | default([]) | length == 1
+          - groups['checkers'] | default([]) | length > 0
+          - oj_checker_machines | map(attribute='localPort') | list | unique | length
+            == oj_checker_machines | length
+          - oj_checker_machines | map(attribute='name') | list | unique | length
+            == oj_checker_machines | length
+          - oj_checker_machines | selectattr('address', 'equalto', '') | list | length == 0
+        fail_msg: >-
+          infra/ansible/hosts.yml needs exactly one application machine, at least
+          one checker, and a different checker_local_port on every checker.
+
+  roles:
+    - role: build-source-archive
+      tags: [source]
+
+- name: Make the application machine able to run Ansible modules
+  hosts: application
+  gather_facts: false
+  any_errors_fatal: true
+
+  roles:
+    - role: bootstrap-python
+      tags: [bootstrap]
+
+- name: Prepare the application machine
+  hosts: application
+  gather_facts: true
+  any_errors_fatal: true
+
+  roles:
+    - role: install-docker
+      tags: [docker]
+    - role: ensure-ops-layout
+      tags: [layout]
+    - role: ship-source
+      tags: [source]
+    # Before the checkers, because they are given the public half of this key.
+    - role: ensure-app-ssh-key
+      tags: [ssh-key]
+
+# A machine that does not answer on SSH at all, and a machine that answers but
+# wants a sudo password, must not stop the other twelve being set up. Both are
+# found here, before any work starts, and only the machines that can actually be
+# set up go into the play below. Both are named at the end of the run.
+#
+# This has to be a play of its own: a play that tolerates an unreachable machine
+# cannot also stop dead on a real failure, because Ansible counts an unreachable
+# host as an error whether or not it was ignored.
+- name: Find out which checkers can be set up at all
+  hosts: checkers
+  gather_facts: false
+  ignore_unreachable: true
+
+  tasks:
+    # Asked as the login user, never through become: a machine that wants a sudo
+    # password fails the become handshake itself, before any module runs, and
+    # `failed_when` never gets a say. So sudo is asked here by hand and the
+    # answer - 0, or not - is read off the output.
+    - name: Ask this machine for root without a password
+      ansible.builtin.raw: sudo -n id -u 2>/dev/null || id -u
+      become: false
+      register: oj_root_probe
+      failed_when: false
+      changed_when: false
+
+    # A machine that never answered runs no task of its own - but `set_fact` and
+    # `group_by` need no connection, so they would happily run for it and record
+    # the wrong reason. Hence the guard on all three.
+    - name: Remember that this machine answered
+      ansible.builtin.set_fact:
+        oj_checker_reachable: true
+      when: not (oj_root_probe.unreachable | default(false))
+
+    - name: Remember a machine that wants a sudo password
+      ansible.builtin.set_fact:
+        oj_checker_skipped: "it wants a sudo password for {{ ansible_user }}"
+      when:
+        - not (oj_root_probe.unreachable | default(false))
+        - oj_root_probe.stdout | default('') | trim != '0'
+
+    - name: Set the machine aside, or line it up to be set up
+      ansible.builtin.group_by:
+        key: "oj_checkers_{{ 'usable' if oj_checker_skipped is not defined else 'set_aside' }}"
+      when: not (oj_root_probe.unreachable | default(false))
+      changed_when: false
+
+# Everything real happens here, and only on machines already known to answer and
+# to give us root. A failure here is a genuine one - a machine that is there and
+# cannot be set up - and it takes that machine out of the run: the other twelve
+# carry on, the application machine is still deployed, and the closing summary
+# names it and ends the run failed. One machine is never allowed to take the
+# fleet down with it, whether it fails or simply disappears mid-setup.
+- name: Set up every checker that can be set up
+  hosts: oj_checkers_usable
+  gather_facts: false
+  ignore_unreachable: true
+
+  pre_tasks:
+    - name: Require the commit being deployed
+      ansible.builtin.assert:
+        that:
+          - oj_revision | length > 0
+        fail_msg: >-
+          The commit being deployed is not known, so no image could be named.
+          Run the whole playbook (`make deploy`), which packs the source on the
+          control host first.
+
+    - name: Install Python where the machine has none
+      ansible.builtin.include_role:
+        name: bootstrap-python
+      tags: [bootstrap]
+
+    - name: Read the machine's facts
+      ansible.builtin.setup:
+
+  roles:
+    - role: install-docker
+      tags: [docker]
+    - role: ensure-ops-layout
+      tags: [layout]
+    - role: ship-source
+      tags: [source]
+    - role: authorize-app-ssh-key
+      tags: [ssh-key]
+    - role: sync-problem-packages
+      tags: [problems]
+    - role: deploy-checker
+      tags: [checker]
+
+  post_tasks:
+    # Only a machine that got all the way here is set up. The closing summary
+    # reads this, and its absence, off every checker.
+    - name: Remember that this machine is ready
+      ansible.builtin.set_fact:
+        oj_checker_ready: true
+
+- name: Run the application machine
+  hosts: application
+  gather_facts: true
+  any_errors_fatal: true
+
+  pre_tasks:
+    - name: Require the commit being deployed
+      ansible.builtin.assert:
+        that:
+          - oj_revision | length > 0
+        fail_msg: >-
+          The commit being deployed is not known, so no image could be named.
+          Run the whole playbook (`make deploy`), which packs the source on the
+          control host first.
+
+  roles:
+    - role: ensure-docker-networks
+      tags: [networks]
+    - role: deploy-app-postgres
+      tags: [postgres]
+    - role: deploy-checker-tunnels
+      tags: [tunnels]
+    - role: deploy-app-web
+      tags: [web]
+    - role: deploy-app-proxy
+      tags: [proxy]
+
+  post_tasks:
+    - name: Say where the site is
+      ansible.builtin.debug:
+        msg: >-
+          {{ oj_checker_machines | length }} checkers, commit {{ oj_revision }}.
+          The site is at
+          {{ 'https://' ~ oj_domain if oj_domain | length > 0 else 'http://' ~ ansible_host }}
+          and the machines are listed at
+          {{ 'https://' ~ oj_domain if oj_domain | length > 0 else 'http://' ~ ansible_host }}/admin
+
+- name: Say which machines this run could not set up
+  hosts: control
+  become: false
+  gather_facts: false
+
+  vars:
+    # Ready: it got all the way through. Set aside: it answered but wanted a
+    # sudo password. Silent: it never answered on SSH. Anything else answered,
+    # gave us root, and then did not finish - a real failure.
+    oj_ready: >-
+      {{ groups['checkers'] | map('extract', hostvars)
+         | selectattr('oj_checker_ready', 'defined')
+         | map(attribute='inventory_hostname') | list }}
+    oj_set_aside: >-
+      {{ groups['checkers'] | map('extract', hostvars)
+         | selectattr('oj_checker_skipped', 'defined')
+         | map(attribute='inventory_hostname') | list }}
+    oj_silent: >-
+      {{ groups['checkers'] | map('extract', hostvars)
+         | rejectattr('oj_checker_reachable', 'defined')
+         | map(attribute='inventory_hostname') | list }}
+
+  tasks:
+    - name: Count the checkers that are set up
+      ansible.builtin.debug:
+        msg: >-
+          {{ oj_ready | length }} of {{ groups['checkers'] | length }} checkers
+          are set up and answering.
+
+    - name: Name every checker this run left out
+      ansible.builtin.debug:
+        msg: >-
+          {{ item }} ({{ hostvars[item].ansible_host }}) was left out:
+          {{ hostvars[item].oj_checker_skipped
+             | default('it did not answer on SSH at all') }}.
+          The app lists it as offline and sends it nothing. Run `make deploy`
+          again once it can be reached.
+      loop: "{{ (oj_set_aside + oj_silent) | unique | sort }}"
+      loop_control:
+        label: "{{ item }}"
+
+    # A machine that answered, gave us root and then did not finish is not a
+    # machine to shrug at: it may be half set up. The run ends failed, naming it.
+    - name: Refuse to call the run a success when a machine was left half done
+      ansible.builtin.assert:
+        that:
+          - (groups['checkers'] | difference(oj_ready) | difference(oj_set_aside)
+             | difference(oj_silent)) | length == 0
+        fail_msg: >-
+          Setting up
+          {{ groups['checkers'] | difference(oj_ready) | difference(oj_set_aside)
+             | difference(oj_silent) | join(', ') }}
+          failed after the machine had answered, so it may be half done. The
+          messages above say what went wrong there.
+        success_msg: >-
+          Every machine that could be reached is set up.

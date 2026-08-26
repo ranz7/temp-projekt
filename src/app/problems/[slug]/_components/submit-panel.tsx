@@ -5,10 +5,10 @@ import { useMutation } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Card } from '@/app/_components/card'
+import { cn } from '@/app/_components/cn'
 import { useTRPC } from '@/app/_trpc/config'
 import { CodeEditor } from './code-editor'
-import { type DroppedFileResult, EditorDropZone } from './editor-drop-zone'
+import { type DroppedFileResult, useSolutionFile } from './editor-drop-zone'
 import { LANGUAGE_LABELS } from './language'
 import { LanguagePicker } from './language-picker'
 import { readableSubmissionError } from './readable-submission-error'
@@ -53,54 +53,72 @@ export function SubmitPanel({ problemSlug, languages, isSignedIn }: SubmitPanelP
     createSubmissionMutation.mutate({ problemSlug, language, sourceCode: source })
   }
 
+  const { isDraggingOver, dropZoneProps, openFilePicker, fileInput } = useSolutionFile({
+    onFileLoaded: handleFileLoaded,
+    onFileRejected: setNotice
+  })
+
   const errorMessage = createSubmissionMutation.isError
     ? readableSubmissionError(createSubmissionMutation.error)
     : null
 
   return (
-    <Card>
-      <div className='flex items-center justify-between gap-4'>
-        <h2 className='font-semibold text-sm'>Submit a solution</h2>
+    <div className='submit-form'>
+      <div className='flex flex-wrap items-end gap-3'>
         <LanguagePicker languages={languages} value={language} onChange={setLanguage} />
+        <button type='button' onClick={openFilePicker} className='btn-secondary'>
+          Attach file
+        </button>
+        {fileInput}
+        {isSignedIn ? (
+          <button
+            type='button'
+            onClick={handleSubmit}
+            disabled={createSubmissionMutation.isPending || source.trim().length === 0}
+            className='btn-primary'
+          >
+            {createSubmissionMutation.isPending ? 'Submitting...' : 'Submit'}
+          </button>
+        ) : (
+          <button type='button' disabled className='btn-primary'>
+            Submit
+          </button>
+        )}
       </div>
 
-      <EditorDropZone onFileLoaded={handleFileLoaded} onFileRejected={setNotice}>
-        <CodeEditor language={language} value={source} onChange={setSource} />
-      </EditorDropZone>
+      {isSignedIn ? null : (
+        <p className='text-muted text-xs'>
+          <Link href='/login' className='text-accent hover:underline'>
+            Log in
+          </Link>{' '}
+          to submit a solution.
+        </p>
+      )}
+
+      <div className='submit-editor-block'>
+        <div className='mb-1 flex items-center justify-between font-medium text-muted text-xs'>
+          <span>Source code</span>
+          <span className='font-normal text-meta'>Type here, or drop a file onto it</span>
+        </div>
+        {/* Dropping a file is mouse-only by nature; "Attach file" above is the
+            keyboard-reachable equivalent. */}
+        <div
+          {...dropZoneProps}
+          className={cn(
+            'flex min-h-0 flex-1 flex-col rounded-md outline-2 outline-dashed outline-transparent transition-colors',
+            isDraggingOver && 'outline-accent'
+          )}
+        >
+          <CodeEditor language={language} value={source} onChange={setSource} />
+        </div>
+      </div>
 
       {notice !== null ? <p className='text-muted text-xs'>{notice}</p> : null}
       {errorMessage !== null ? (
-        <p role='alert' className='text-danger text-sm'>
+        <p role='alert' className='font-medium text-danger text-xs'>
           {errorMessage}
         </p>
       ) : null}
-
-      {isSignedIn ? (
-        <button
-          type='button'
-          onClick={handleSubmit}
-          disabled={createSubmissionMutation.isPending || source.trim().length === 0}
-          className='self-start rounded-lg bg-accent px-4 py-2 font-medium text-accent-foreground text-sm disabled:opacity-60'
-        >
-          {createSubmissionMutation.isPending ? 'Submitting…' : 'Submit'}
-        </button>
-      ) : (
-        <div className='flex flex-wrap items-center gap-2'>
-          <button
-            type='button'
-            disabled
-            className='rounded-lg bg-accent px-4 py-2 font-medium text-accent-foreground text-sm opacity-60'
-          >
-            Submit
-          </button>
-          <p className='text-muted text-sm'>
-            <Link href='/login' className='text-accent underline'>
-              Log in
-            </Link>{' '}
-            to submit a solution.
-          </p>
-        </div>
-      )}
-    </Card>
+    </div>
   )
 }

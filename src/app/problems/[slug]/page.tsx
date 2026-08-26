@@ -4,9 +4,8 @@ import { TRPCError } from '@trpc/server'
 import { notFound } from 'next/navigation'
 import { getCurrentUser } from '@/app/_hooks/get-current-user'
 import { getQueryClient, trpc } from '@/app/_trpc/rsc'
-import { ProblemRanking } from './_components/problem-ranking'
+import { ProblemPanel } from './_components/problem-panel'
 import { ProblemStatement } from './_components/problem-statement'
-import { SubmitPanel } from './_components/submit-panel'
 
 type ProblemPageProps = {
   params: Promise<{ slug: string }>
@@ -34,18 +33,16 @@ export default async function ProblemPage({ params }: ProblemPageProps) {
   ])
 
   return (
-    <main className='mx-auto flex w-full max-w-6xl flex-col gap-6 p-6'>
-      <div className='grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]'>
+    <div className='problem-detail-layout'>
+      <div className='problem-detail-statement'>
         <ProblemStatement problem={problem} />
-        <div className='flex flex-col gap-6'>
-          <SubmitPanel
-            problemSlug={problem.slug}
-            languages={problem.languages}
-            isSignedIn={user !== null}
-          />
-          <ProblemRanking rows={ranking} />
-        </div>
       </div>
-    </main>
+      <ProblemPanel
+        problemSlug={problem.slug}
+        languages={problem.languages}
+        isSignedIn={user !== null}
+        ranking={ranking}
+      />
+    </div>
   )
 }

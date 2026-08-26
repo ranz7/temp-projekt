@@ -1,19 +1,20 @@
-# The two checker workers.
+# One checker machine, locally.
 #
-# Neither declares a container name or publishes a host port, because both would
-# stop `docker compose up --scale` dead. Compose still names the replicas
-# predictably - projekt-checker-bwrap-1, -2, -3 - and each health endpoint is
-# reached inside the compose network rather than from the host.
+# It runs the same image and the same five grants a real checker machine gets
+# from Ansible. The real fleet is thirteen machines behind SSH tunnels; here it
+# is one container on the compose network, which the app reaches directly
+# because there is nothing to tunnel through.
 #
-# Every replica mounts the same read-only problem packages, so any replica can
-# judge any problem and no replica depends on a file only it has.
+# It publishes no host port. The app container reaches it by the service name,
+# and nothing else on this laptop can reach it at all.
 
 services:
-  checker-bwrap:
-    image: ${CHECKER_BWRAP_IMAGE:-projekt-checker-bwrap:local}
+  checker:
+    image: ${CHECKER_IMAGE:-projekt-checker:local}
     build:
       context: ../..
       dockerfile: deploy/checker/Dockerfile.bwrap
+    container_name: projekt_checker
     restart: unless-stopped
     env_file:
       - path: ./.env.example
@@ -22,31 +23,31 @@ services:
         required: false
     # Why each of these is here is written out in deploy/README.md. In short:
     # SYS_ADMIN lets bubblewrap create the namespaces and pivot_root into the
-    # sandbox, NET_ADMIN lets it raise loopback inside the unshared network, and
-    # the default seccomp profile blocks pivot_root outright. Nothing here is
-    # `privileged: true`, which would also hand over every other capability.
+    # sandbox, NET_ADMIN lets it raise loopback inside the network namespace it
+    # unshared, the default seccomp profile blocks pivot_root outright, the
+    # default AppArmor profile refuses the mount changes bubblewrap makes, and
+    # Docker's masking of parts of /proc stops the sandbox mounting its own.
+    # Nothing here is `privileged: true`, which would also hand over every other
+    # capability on the machine.
+    #
+    # The last two matter on the real machines rather than on a laptop: Ubuntu
+    # loads an AppArmor profile and macOS does not, so a sandbox that works here
+    # can still fail there. `infra/ansible` proves the sandbox on each machine
+    # right after starting the checker, so that difference cannot go unnoticed.
     cap_add:
       - SYS_ADMIN
       - NET_ADMIN
     security_opt:
       - seccomp=unconfined
+      - apparmor=unconfined
+      - systempaths=unconfined
     volumes:
-      - ${PROBLEM_PACKAGES_HOST_PATH:-../../problems}:${PROBLEM_PACKAGES_PATH:-/problems}:ro
-      # Anonymous, so every replica gets a scratch directory of its own.
-      - ${CHECKER_SCRATCH_PATH:-/scratch}
-
-  checker-cpp:
-    image: ${CHECKER_CPP_IMAGE:-projekt-checker-cpp:local}
-    build:
-      context: ../..
-      dockerfile: deploy/checker/Dockerfile.cpp
-    restart: unless-stopped
-    env_file:
-      - path: ./.env.example
-        required: true
-      - path: ./.env
-        required: false
-    # It compiles nothing and runs nothing: no capabilities, non-root user.
-    volumes:
-      - ${PROBLEM_PACKAGES_HOST_PATH:-../../problems}:${PROBLEM_PACKAGES_PATH:-/problems}:ro
-      - ${CHECKER_SCRATCH_PATH:-/scratch}
+      # The problem packages, read only. No contest data is baked into the image
+      # and none travels over HTTP. Only the host side is configurable: the two
+      # paths inside the container are what `./.env.example` sets there, and
+      # changing one means changing both.
+      - ${PROBLEM_PACKAGES_HOST_PATH:-../../problems}:/problems:ro
+      # Anonymous, so a job's files never touch the host tree.
+      - /scratch
+    # Running jobs are given their grace period before the process is killed.
+    stop_grace_period: 40s

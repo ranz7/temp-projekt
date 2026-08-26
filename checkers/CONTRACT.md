@@ -1,205 +1,178 @@
-# Checker worker HTTP contract
+# Checker service HTTP contract
 
-This document defines contract version 1 between the Python checker workers and the Next.js app.
-Every JSON request and response payload contains `"contractVersion": 1`.
-A different version must be rejected instead of being interpreted as version 1.
+This document defines contract version 2 between the Next.js app and one checker machine.
+Every JSON request and response body contains `"contractVersion": 2`.
+A different version is refused with `400 Bad Request` instead of being interpreted as version 2.
+
+Version 2 turns the direction around.
+The app calls the checker; a checker never calls the app, never claims work and never posts a result back.
+A checker reads every problem's data - tests, limits, the problem's own checker or grader - from its own disk under `PROBLEM_PACKAGES_PATH/<packageDirectory>/`.
 
 ## Transport and authentication
 
-Workers call the Next.js app over HTTP.
-Every endpoint in this document except health endpoints requires `X-Service-Key: <SERVICE_KEY>`.
-No checker request uses cookies.
-A missing or incorrect key returns `401 Unauthorized`.
-`GET /api/health` and `GET /api/ready` require no key.
+Each checker machine runs this service on its own loopback address.
+The app reaches it through an SSH tunnel opened from the application machine, so nothing is exposed to the internet and no firewall rule is needed.
 
-Unless stated otherwise, successful checker calls return `200 OK` with:
+Every endpoint except `GET /health` requires `X-Service-Key: <SERVICE_KEY>`, compared in constant time.
+A missing or wrong key returns `401 Unauthorized` and judges nothing.
+A checker started with no `SERVICE_KEY` refuses everything except `GET /health`.
+No call uses cookies.
+
+Every response body is JSON and names the contract version.
+An error carries a readable reason:
 
 ```json
-{ "contractVersion": 1 }
+{ "contractVersion": 2, "error": "a valid X-Service-Key header is required" }
 ```
 
-## Claim work
+## Health
 
-`POST /api/internal/checker/claim` asks for one submission matching a worker's supported languages.
-
-Request:
+`GET /health` needs no key, so a deployment can check the machine is alive.
 
 ```json
 {
-  "contractVersion": 1,
-  "workerId": "bwrap-1",
-  "languages": ["python"]
+  "contractVersion": 2,
+  "ok": true,
+  "busy": 1,
+  "capacity": 2,
+  "problems": ["cf-4-A", "combo", "minimizing-coins", "rl-nearest-pairs"],
+  "version": "3240be9"
 }
 ```
 
-`languages` is a non-empty list containing `python`, `cpp`, or both.
-When no matching submission is ready, the response is:
+- `busy` is how many submissions this machine is judging right now, `capacity` how many it may judge at once.
+- `problems` lists the package directories actually present on this machine's disk, so the app can tell whether the machine can judge a given problem. A directory counts when it holds a `problem.json` or a `tests` directory.
+- `version` is the checker's git revision, or its package version when it does not run from a checkout.
+
+## Judge a submission
+
+`POST /judge` asks the machine to judge one submission.
 
 ```json
 {
-  "contractVersion": 1,
-  "job": null
+  "contractVersion": 2,
+  "submissionId": "0198df77-9122-7000-8000-000000000001",
+  "problemSlug": "combo",
+  "packageDirectory": "combo",
+  "language": "cpp",
+  "sourceCode": "int main() {}\n"
 }
 ```
 
-When work is available, the response contains one leased job:
+`packageDirectory` is a single directory name; anything that could point elsewhere is refused.
+No tests, limits or checker settings travel over HTTP: the machine reads them from that directory.
+
+The answer is `202 Accepted`, and judging starts in the background:
+
+```json
+{ "contractVersion": 2, "jobId": "8f14e45fceea167a5a36dedd4bea2543" }
+```
+
+- Sending the same `submissionId` again while it is still being judged answers the same `jobId` and judges nothing twice.
+- A machine already at capacity answers `503 Service Unavailable` with a readable reason and queues nothing. The queue lives in the app.
+- A body that is not this contract answers `400 Bad Request`.
+
+## Read a result
+
+`GET /judge/<jobId>` reads a job back.
+
+While it is being judged:
+
+```json
+{ "contractVersion": 2, "status": "running" }
+```
+
+When it has finished:
 
 ```json
 {
-  "contractVersion": 1,
-  "job": {
-    "submissionId": "0198df77-9122-7000-8000-000000000001",
-    "claimId": "0198df77-9122-7000-8000-000000000002",
-    "problemSlug": "cf-4-A",
-    "packageDirectory": "cf-4-A",
-    "language": "python",
-    "sourceCode": "print('YES')\n",
-    "timeLimitMs": 1000,
-    "memoryLimitMb": 64,
-    "checkerType": "token",
-    "checkerPath": null,
+  "contractVersion": 2,
+  "status": "done",
+  "result": {
+    "status": "accepted",
+    "score": 20,
+    "maxScore": 20,
+    "compileMessage": null,
+    "maxCpuMs": 12,
+    "maxMemoryKb": 4096,
     "tests": [
       {
-        "problemTestId": "0198df77-9122-7000-8000-000000000003",
         "ordinal": 1,
         "visibility": "public",
-        "points": 0,
-        "input": "8\n",
-        "expectedOutput": "YES\n"
-      },
-      {
-        "problemTestId": "0198df77-9122-7000-8000-000000000004",
-        "ordinal": 2,
-        "visibility": "hidden",
-        "points": 1,
-        "inputFile": "002.in",
-        "outputFile": "002.out"
+        "verdict": "passed",
+        "passed": true,
+        "pointsAwarded": 0,
+        "message": null,
+        "actualOutput": "YES\n",
+        "timeMs": 10,
+        "memoryKb": 4096,
+        "name": "001",
+        "presses": null
       }
     ]
   }
 }
 ```
 
-Tests are ordered by ascending `ordinal`.
-For `checkerType: "custom"`, `checkerPath` is the checker script path relative to the package directory.
-For `checkerType: "token"`, `checkerPath` is `null`.
-Public tests contain inline `input` and `expectedOutput`.
-Hidden tests contain only `inputFile` and `outputFile`, relative to the package's `tests` directory.
-Hidden input and output content is never sent over HTTP; the worker reads the named files from its mounted package filesystem.
+An unknown `jobId` answers `404 Not Found`.
+A finished result stays readable for at least fifteen minutes and may be discarded after that, so an unknown job is either a job that never existed or one the app was too slow to read.
 
-## Heartbeat
+### Words the app accepts
 
-`POST /api/internal/checker/heartbeat` extends the lease identified by both IDs.
+`result.status` is one of `accepted`, `wrong_answer`, `time_limit`, `memory_limit`, `runtime_error`, `compilation_error`, `internal_error`.
 
-```json
-{
-  "contractVersion": 1,
-  "submissionId": "0198df77-9122-7000-8000-000000000001",
-  "claimId": "0198df77-9122-7000-8000-000000000002"
-}
+`tests[].verdict` is one of `passed`, `wrong_answer`, `time_limit`, `memory_limit`, `runtime_error`.
+There is no per-test internal error: a submission the machine cannot judge at all is one `internal_error` with no rows.
+
+`tests[].visibility` is `public` or `hidden`.
+
+A test row carries no database id.
+The app matches rows to its own tests by `ordinal`, counted from 1 in the order the package lists them.
+`name` is the test file's stem where the judge knows it, and `presses` is the number of button presses an interactive problem's grader counted; both are `null` otherwise.
+
+`score` counts the hidden tests that passed, `maxScore` the points those hidden tests are worth.
+Public tests are worth nothing.
+`compileMessage` carries the compiler's words for a `compilation_error`, and a readable reason for an `internal_error`.
+
+## Failure and shutdown
+
+A crash while judging one submission becomes an `internal_error` result for that submission and does not kill the service.
+
+`SIGINT` and `SIGTERM` stop the machine accepting new work.
+Running jobs are given a grace period to finish; whatever is still going is marked `internal_error`, the scratch root is emptied and the process exits 0.
+A submission left `internal_error` this way is the app's to retry.
+
+## Environment
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `SERVICE_KEY` | none | The shared key. Unset means the machine answers only `/health`. |
+| `CHECKER_BIND` | `127.0.0.1` | The address the service listens on. The default keeps it off the internet. |
+| `CHECKER_PORT` | `8080` | The port the service listens on. |
+| `CHECKER_CAPACITY` | `2` | How many submissions this machine judges at once. |
+| `PROBLEM_PACKAGES_PATH` | `/problems` | Where the problem packages live on this machine. |
+| `CHECKER_SCRATCH_PATH` | `/tmp/online-judge` | Where a job's scratch directory is made and deleted. |
+| `CHECKER_RESULT_TTL_SECONDS` | `900` | How long a finished result stays readable. |
+| `CHECKER_SHUTDOWN_GRACE_SECONDS` | `30` | How long a running job may take to finish while stopping. |
+| `CHECKER_JUDGE` | `bwrap:run_judge` | The judge behind the seam, as `module:function`. |
+| `CHECKER_LOG_LEVEL` | `INFO` | How much the service says. |
+
+The sandbox reads its own settings - `JUDGE_SANDBOX`, `BWRAP_PATH`, `CGROUP_ROOT`, `PYTHON_PATH` - and `checkers/README.md` documents those.
+
+No host name, port, path or key is written into the source.
+
+## The judging seam
+
+The service knows one function, resolved from `CHECKER_JUDGE` the first time a submission is judged:
+
+```python
+run_judge(request, *, packages_path: Path, scratch_path: Path) -> report
 ```
 
-## Report progress or a result
+- `request` carries `submission_id`, `problem_slug`, `package_directory`, `language` and `source_code`.
+- `scratch_path` is a fresh empty directory for this job alone, deleted when the job ends either way.
+- `packages_path` is `PROBLEM_PACKAGES_PATH`; the judge reads `packages_path/<package_directory>/` itself.
+- The report carries `status`, `score`, `max_score`, `compile_message`, `max_cpu_ms`, `max_memory_kb` and `tests`, each row carrying `ordinal`, `visibility`, `verdict`, `passed`, `points_awarded`, `message`, `actual_output`, `time_ms`, `memory_kb` and optionally `name` and `presses`.
 
-`POST /api/internal/checker/result` reports either progress or the final result for the current claim.
-A progress report has no result fields:
-
-```json
-{
-  "contractVersion": 1,
-  "submissionId": "0198df77-9122-7000-8000-000000000001",
-  "claimId": "0198df77-9122-7000-8000-000000000002",
-  "status": "running"
-}
-```
-
-A final report uses `accepted`, `wrong_answer`, `time_limit`, `memory_limit`, `runtime_error`, `compilation_error`, or `internal_error`:
-
-```json
-{
-  "contractVersion": 1,
-  "submissionId": "0198df77-9122-7000-8000-000000000001",
-  "claimId": "0198df77-9122-7000-8000-000000000002",
-  "status": "accepted",
-  "score": 1,
-  "maxScore": 1,
-  "compileMessage": null,
-  "maxCpuMs": 12,
-  "maxMemoryKb": 4096,
-  "tests": [
-    {
-      "problemTestId": "0198df77-9122-7000-8000-000000000003",
-      "ordinal": 1,
-      "verdict": "passed",
-      "passed": true,
-      "pointsAwarded": 0,
-      "message": null,
-      "actualOutput": "YES\n",
-      "timeMs": 10,
-      "memoryKb": 4096
-    }
-  ]
-}
-```
-
-Per-test `verdict` is `passed`, `wrong_answer`, `time_limit`, `memory_limit`, or `runtime_error`.
-`compileMessage`, per-test `message`, and per-test `actualOutput` are strings or `null`.
-A compilation error has its compiler diagnostic in `compileMessage` and an empty `tests` list.
-Workers run every test, so other final reports contain the complete ordered test list.
-
-## Release work
-
-`POST /api/internal/checker/release` gives up a claim when the worker cannot judge it now, for example because OIOIOI is unreachable.
-
-```json
-{
-  "contractVersion": 1,
-  "submissionId": "0198df77-9122-7000-8000-000000000001",
-  "claimId": "0198df77-9122-7000-8000-000000000002",
-  "reason": "OIOIOI is unreachable"
-}
-```
-
-The app returns the submission to the queue without consuming one of its three judging attempts.
-
-## Idempotency and fencing
-
-The app applies heartbeat, result, and release only to the active `claimId` for the named submission.
-A submission that already has a final status ignores every later heartbeat, result, or release, including a duplicate final report.
-The app still returns `200 OK` and changes nothing.
-
-## Environment variables
-
-### Next.js app
-
-- `DATABASE_URL`: PostgreSQL connection URL; required, with no production default.
-- `REDIS_URL`: Redis connection URL used to wake workers; defaults to `redis://127.0.0.1:6379` for local development.
-- `SERVICE_KEY`: shared value expected in `X-Service-Key`; required, with no production default.
-- `SUBMISSION_LEASE_SECONDS`: lease duration extended by heartbeat; defaults to `60`.
-- `SUBMISSION_MAX_ATTEMPTS`: expired-lease attempt limit; defaults to `3`.
-- `PROBLEM_PACKAGES_PATH`: app-side root containing problem packages for seeding; defaults to `./problems`.
-
-### Both checker workers
-
-- `APP_URL`: base URL of the Next.js app; defaults to `http://127.0.0.1:3000` for local development.
-- `SERVICE_KEY`: shared value sent in `X-Service-Key`; required and identical to the app value.
-- `WORKER_ID`: stable unique worker identifier; defaults to the container hostname.
-- `PROBLEM_PACKAGES_PATH`: mounted root containing the same problem packages on every replica; defaults to `/problems`.
-- `CHECKER_POLL_SECONDS`: delay after a no-work response; defaults to `1`.
-- `CHECKER_HEARTBEAT_SECONDS`: heartbeat interval, shorter than the lease; defaults to `20`.
-- `CHECKER_SCRATCH_PATH`: per-job temporary workspace root; defaults to `/tmp/online-judge`.
-- `CHECKER_HEALTH_PORT`: worker health server port; defaults to `8080`.
-
-### C++ checker only
-
-- `OIOIOI_URL`: base URL of the external OIOIOI service; required.
-- `OIOIOI_TOKEN`: OIOIOI API token; required.
-- `OIOIOI_CONTEST_ID`: OIOIOI contest identifier; required.
-- `OIOIOI_POLL_SECONDS`: result polling interval; defaults to `2`.
-- `OIOIOI_REQUEST_TIMEOUT_SECONDS`: HTTP request timeout; defaults to `10`.
-
-### Sandboxed Python checker only
-
-- `BWRAP_PATH`: bubblewrap executable; defaults to `/usr/bin/bwrap`.
-- `CGROUP_ROOT`: writable cgroup v2 root; defaults to `/sys/fs/cgroup`.
-- `PYTHON_PATH`: Python executable used for submissions; defaults to `/usr/bin/python3`.
+`common.contract.FinalReport` is that shape, and a judge may answer with its own equivalent object: `common.judging.coerce_report` reads it by attribute.
+Anything the judge raises becomes an `internal_error` for that submission.

@@ -20,12 +20,12 @@ export const STATUS_LABELS: Record<SubmissionStatus, string> = {
   queued: 'Queued',
   running: 'Running',
   accepted: 'Accepted',
-  wrong_answer: 'Wrong answer',
-  time_limit: 'Time limit',
-  memory_limit: 'Memory limit',
-  runtime_error: 'Runtime error',
-  compilation_error: 'Compile error',
-  internal_error: 'Internal error'
+  wrong_answer: 'Wrong Answer',
+  time_limit: 'Time Limit',
+  memory_limit: 'Memory Limit',
+  runtime_error: 'Runtime Error',
+  compilation_error: 'Compile Error',
+  internal_error: 'Internal Error'
 }
 
 /** Accent colour for each status. Reuse this instead of re-deriving it. */
@@ -42,13 +42,13 @@ export const STATUS_ACCENTS: Record<SubmissionStatus, StatusAccent> = {
 }
 
 const ACCENT_CLASSES: Record<StatusAccent, string> = {
-  neutral: 'bg-status-neutral/15 text-status-neutral',
-  blue: 'bg-status-blue/15 text-status-blue',
-  green: 'bg-status-green/15 text-status-green',
-  red: 'bg-status-red/15 text-status-red',
-  amber: 'bg-status-amber/15 text-status-amber',
-  orange: 'bg-status-orange/15 text-status-orange',
-  violet: 'bg-status-violet/15 text-status-violet'
+  neutral: 'bg-tint-neutral text-tint-neutral-ink ring-tint-neutral-ring',
+  blue: 'bg-tint-blue text-tint-blue-ink ring-tint-blue-ring',
+  green: 'bg-tint-green text-tint-green-ink ring-tint-green-ring',
+  red: 'bg-tint-red text-tint-red-ink ring-tint-red-ring',
+  amber: 'bg-tint-amber text-tint-amber-ink ring-tint-amber-ring',
+  orange: 'bg-tint-orange text-tint-orange-ink ring-tint-orange-ring',
+  violet: 'bg-tint-violet text-tint-violet-ink ring-tint-violet-ring'
 }
 
 /** A submission's status badge, pulsing while judging is still going. */
@@ -57,13 +57,7 @@ export function StatusBadge({ status }: { status: SubmissionStatus }) {
   const isInFlight = status === 'queued' || status === 'running'
 
   return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium text-xs',
-        ACCENT_CLASSES[accent],
-        isInFlight && 'oj-pulse'
-      )}
-    >
+    <span className={cn('badge', ACCENT_CLASSES[accent], isInFlight && 'oj-pulse')}>
       {STATUS_LABELS[status]}
     </span>
   )

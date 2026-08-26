@@ -1,0 +1,53 @@
+---
+# Capability: sync-problem-packages
+# Problem: a checker reads a problem's tests, limits and grader from its own
+# disk. No test data travels over HTTP and none is baked into an image, so every
+# machine keeps its own copy of `problems/`.
+#
+# The copy comes out of the same source archive, so it is exactly what the
+# deployed commit holds. A package that stops shipping is removed here too,
+# otherwise a machine would keep answering `/health` with a problem the app no
+# longer knows.
+
+- name: Ensure the problems directory
+  ansible.builtin.file:
+    path: "{{ oj_problems_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Unpack the problem packages
+  ansible.builtin.unarchive:
+    src: "{{ oj_source_archive }}"
+    dest: "{{ oj_problems_dir }}"
+    remote_src: true
+    owner: root
+    group: root
+    extra_opts:
+      - --strip-components=1
+      - problems
+  register: oj_problems_unpack
+
+# The table of contents, not an unpack: unarchive cannot answer this.
+- name: List the packages that shipped # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: tar -tf {{ oj_source_archive }} problems/
+  register: oj_problems_shipped
+  changed_when: false
+
+- name: List the packages on this machine
+  ansible.builtin.find:
+    paths: "{{ oj_problems_dir }}"
+    file_type: directory
+    recurse: false
+  register: oj_problems_present
+
+- name: Remove a package this commit no longer ships
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ oj_problems_present.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: ('problems/' ~ (item.path | basename) ~ '/') not in oj_problems_shipped.stdout_lines

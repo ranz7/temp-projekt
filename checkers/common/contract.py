@@ -1,24 +1,26 @@
 """
-Contract version 1 between the checker workers and the Next.js app.
+Contract version 2 between the Next.js app and one checker machine.
 
 `checkers/CONTRACT.md` is the agreement; this module is its Python side. Payloads
 are plain dictionaries at the edge and dataclasses everywhere inside, so a field
 name is spelled once.
+
+Direction matters: in version 2 the application calls the checker. A checker never
+calls the application, and it reads every problem's data from its own disk.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
-CONTRACT_VERSION = 1
+CONTRACT_VERSION = 2
 
 SERVICE_KEY_HEADER = "X-Service-Key"
 
-CLAIM_PATH = "/api/internal/checker/claim"
-HEARTBEAT_PATH = "/api/internal/checker/heartbeat"
-RESULT_PATH = "/api/internal/checker/result"
-RELEASE_PATH = "/api/internal/checker/release"
+HEALTH_PATH = "/health"
+JUDGE_PATH = "/judge"
 
 # Final submission statuses the app accepts.
 ACCEPTED = "accepted"
@@ -42,162 +44,133 @@ FINAL_STATUSES = frozenset(
 )
 
 # Per-test verdicts the app accepts. There is no per-test internal error: a job the
-# worker cannot run at all becomes an internal error for the whole submission.
+# checker cannot run at all becomes an internal error for the whole submission.
 PASSED = "passed"
 TEST_VERDICTS = frozenset({PASSED, WRONG_ANSWER, TIME_LIMIT, MEMORY_LIMIT, RUNTIME_ERROR})
 
+VISIBILITIES = frozenset({"public", "hidden"})
+
+# Job lifecycle, as the app polls it.
+RUNNING = "running"
+DONE = "done"
+
 
 class ContractError(RuntimeError):
-    """The app answered something this worker refuses to interpret."""
+    """A request this checker refuses to interpret."""
 
 
 class ContractVersionError(ContractError):
-    """The app speaks a different contract version, so the worker stops guessing."""
+    """The caller speaks a different contract version, so nothing is guessed at."""
 
 
 def require_contract_version(payload: Any) -> dict[str, Any]:
-    """Every answer must name contract version 1; anything else is an error."""
+    """Every request must name contract version 2; anything else is an error."""
     if not isinstance(payload, dict):
-        raise ContractError("the app answered something that is not a JSON object")
+        raise ContractError("the request body is not a JSON object")
 
     version = payload.get("contractVersion")
 
     if version != CONTRACT_VERSION:
         raise ContractVersionError(
-            f"this worker speaks contract version {CONTRACT_VERSION}, "
-            f"the app answered {version!r}"
+            f"this checker speaks contract version {CONTRACT_VERSION}, "
+            f"the request says {version!r}"
         )
     return payload
 
 
-@dataclass(frozen=True)
-class JobTest:
-    """One test of a claimed job.
+def envelope(**fields: Any) -> dict[str, Any]:
+    """Every answer this checker sends names its contract version first."""
+    return {"contractVersion": CONTRACT_VERSION, **fields}
 
-    A public test carries its input and expected output inline. A hidden test carries
-    only file names; their content is read from the worker's own package directory and
-    never travels over HTTP.
+
+@dataclass(frozen=True)
+class JudgeRequest:
+    """One submission the application asked this machine to judge.
+
+    Everything else - the tests, the limits, the problem's own checker or grader -
+    is read from `PROBLEM_PACKAGES_PATH/<package_directory>/` on this machine.
     """
 
-    problem_test_id: str
-    ordinal: int
-    visibility: str
-    points: float
-    input_text: str | None = None
-    expected_output: str | None = None
-    input_file: str | None = None
-    output_file: str | None = None
-
-    @property
-    def is_hidden(self) -> bool:
-        return self.visibility == "hidden"
-
-
-@dataclass(frozen=True)
-class Job:
-    """One leased submission to judge."""
-
     submission_id: str
-    claim_id: str
     problem_slug: str
     package_directory: str
     language: str
     source_code: str
-    time_limit_ms: int
-    memory_limit_mb: int
-    checker_type: str
-    checker_path: str | None
-    tests: list[JobTest] = field(default_factory=list)
-
-    @property
-    def hidden_points(self) -> float:
-        """The maximum score: samples are worth nothing."""
-        return sum(test.points for test in self.tests if test.is_hidden)
 
 
-def parse_job_test(payload: dict[str, Any]) -> JobTest:
-    visibility = payload.get("visibility")
+def _required_text(payload: dict[str, Any], key: str) -> str:
+    value = payload.get(key)
 
-    if visibility not in ("public", "hidden"):
-        raise ContractError(f"unknown test visibility {visibility!r}")
+    if not isinstance(value, str) or value.strip() == "":
+        raise ContractError(f"{key} is required and must be a non-empty string")
+    return value.strip()
 
-    if visibility == "hidden":
-        input_file = payload.get("inputFile")
-        output_file = payload.get("outputFile")
 
-        if not input_file or not output_file:
-            raise ContractError("a hidden test must name an input and an output file")
+def parse_judge_request(payload: Any) -> JudgeRequest:
+    """Read a `POST /judge` body, refusing anything that is not the contract."""
+    body = require_contract_version(payload)
+    package_directory = _required_text(body, "packageDirectory")
 
-        return JobTest(
-            problem_test_id=str(payload["problemTestId"]),
-            ordinal=int(payload["ordinal"]),
-            visibility="hidden",
-            points=float(payload.get("points") or 0),
-            input_file=str(input_file),
-            output_file=str(output_file),
-        )
+    if package_directory != Path(package_directory).name or package_directory in (".", ".."):
+        raise ContractError("packageDirectory must be a single directory name")
 
-    return JobTest(
-        problem_test_id=str(payload["problemTestId"]),
-        ordinal=int(payload["ordinal"]),
-        visibility="public",
-        points=float(payload.get("points") or 0),
-        input_text=str(payload.get("input") or ""),
-        expected_output=str(payload.get("expectedOutput") or ""),
+    source_code = body.get("sourceCode")
+
+    if not isinstance(source_code, str) or source_code == "":
+        raise ContractError("sourceCode is required and must be a non-empty string")
+
+    return JudgeRequest(
+        submission_id=_required_text(body, "submissionId"),
+        problem_slug=_required_text(body, "problemSlug"),
+        package_directory=package_directory,
+        language=_required_text(body, "language").lower(),
+        source_code=source_code,
     )
-
-
-def parse_job(payload: dict[str, Any]) -> Job:
-    try:
-        tests = [parse_job_test(test) for test in payload.get("tests") or []]
-
-        return Job(
-            submission_id=str(payload["submissionId"]),
-            claim_id=str(payload["claimId"]),
-            problem_slug=str(payload["problemSlug"]),
-            package_directory=str(payload["packageDirectory"]),
-            language=str(payload["language"]),
-            source_code=str(payload.get("sourceCode") or ""),
-            time_limit_ms=int(payload["timeLimitMs"]),
-            memory_limit_mb=int(payload["memoryLimitMb"]),
-            checker_type=str(payload.get("checkerType") or "token"),
-            checker_path=payload.get("checkerPath") or None,
-            tests=sorted(tests, key=lambda test: test.ordinal),
-        )
-    except ContractError:
-        raise
-    except (KeyError, TypeError, ValueError) as error:
-        raise ContractError(f"the claimed job does not match the contract: {error}") from error
 
 
 @dataclass(frozen=True)
 class TestReport:
-    """One row of the per-test list the person sees."""
+    """One row of the per-test list the person sees.
 
-    problem_test_id: str
+    The row carries no database id: the application matches rows to its own tests by
+    `ordinal`, so a checker never has to be told what the database calls a test.
+
+    `name` is the test file's stem, when the judge knows it, and `presses` is the
+    number of button presses an interactive problem's grader counted. Both are null
+    for a judge or a problem that has nothing to say there.
+    """
+
     ordinal: int
+    visibility: str
     verdict: str
     passed: bool
-    points_awarded: float
-    message: str | None
-    actual_output: str | None
-    time_ms: int
-    memory_kb: int
+    points_awarded: float = 0.0
+    message: str | None = None
+    actual_output: str | None = None
+    time_ms: int = 0
+    memory_kb: int = 0
+    name: str | None = None
+    presses: int | None = None
 
     def to_payload(self) -> dict[str, Any]:
         if self.verdict not in TEST_VERDICTS:
             raise ContractError(f"unknown test verdict {self.verdict!r}")
 
+        if self.visibility not in VISIBILITIES:
+            raise ContractError(f"unknown test visibility {self.visibility!r}")
+
         return {
-            "problemTestId": self.problem_test_id,
-            "ordinal": self.ordinal,
+            "ordinal": int(self.ordinal),
+            "visibility": self.visibility,
             "verdict": self.verdict,
-            "passed": self.passed,
+            "passed": bool(self.passed),
             "pointsAwarded": max(0.0, float(self.points_awarded)),
             "message": self.message,
             "actualOutput": self.actual_output,
             "timeMs": max(0, int(self.time_ms)),
             "memoryKb": max(0, int(self.memory_kb)),
+            "name": self.name,
+            "presses": None if self.presses is None else int(self.presses),
         }
 
 
@@ -228,23 +201,8 @@ class FinalReport:
         }
 
 
-@dataclass(frozen=True)
-class Release:
-    """The worker cannot judge this job now, so the app queues it again.
-
-    `keep_scratch` holds the job's scratch directory back from the usual cleanup, so
-    the C++ worker does not submit the same source to OIOIOI twice after an outage.
-    """
-
-    reason: str
-    keep_scratch: bool = False
-
-
-JudgeOutcome = FinalReport | Release
-
-
 def internal_error(message: str, *, max_score: float = 0.0) -> FinalReport:
-    """The readable version of "this worker broke while judging your solution"."""
+    """The readable version of "this checker broke while judging your solution"."""
     return FinalReport(
         status=INTERNAL_ERROR,
         score=0.0,

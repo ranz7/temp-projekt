@@ -1,9 +1,11 @@
 import Link from 'next/link'
 
 const LINKS = [
+  { href: '/', label: 'Home' },
   { href: '/problems', label: 'Problems' },
   { href: '/submissions', label: 'Submissions' },
-  { href: '/ranking', label: 'Ranking' }
+  { href: '/ranking', label: 'Ranking' },
+  { href: '/admin', label: 'Admin' }
 ]
 
 /**
@@ -13,9 +15,13 @@ const LINKS = [
  */
 export function SiteNav() {
   return (
-    <nav className='flex items-center gap-4 text-sm'>
+    <nav className='flex flex-wrap items-center gap-1 font-medium text-sm'>
       {LINKS.map(link => (
-        <Link key={link.href} href={link.href} className='text-muted hover:text-foreground'>
+        <Link
+          key={link.href}
+          href={link.href}
+          className='rounded-md px-3 py-1.5 text-muted transition hover:bg-placeholder hover:text-foreground'
+        >
           {link.label}
         </Link>
       ))}

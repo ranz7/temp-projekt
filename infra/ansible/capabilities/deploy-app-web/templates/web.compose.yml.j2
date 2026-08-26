@@ -1,0 +1,74 @@
+# Managed by Ansible capability deploy-app-web.
+#
+# Two containers from the one image. The app takes submissions into the queue;
+# the loop runner is what empties it - it syncs the machine registry from
+# CHECKER_MACHINES, asks every machine how it is doing, hands waiting
+# submissions to machines that can take them and writes back what they answer.
+# Without it the fleet looks perfectly healthy and nothing is ever judged.
+#
+# Neither publishes a port: the proxy in front of the app is the only way in,
+# over the internal `oj-ingress` network. Migrations and the seed run in the
+# app's own entrypoint before it serves, so an empty database becomes a working
+# site with no second command.
+name: online-judge-web
+
+services:
+  web:
+    image: {{ oj_web_image }}
+    container_name: {{ oj_web_container }}
+    restart: unless-stopped
+    env_file:
+      - path: {{ oj_compose_dir }}/web.env
+        required: true
+    networks:
+      ingress:
+        aliases: [web]
+      db:
+      tunnels:
+    healthcheck:
+      # Readiness, not liveness: inside the stack, healthy has to mean the
+      # database answers, because that is what the proxy is about to rely on.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/ready"]
+      interval: 10s
+      timeout: 5s
+      # Covers migrate and seed on a database that is empty.
+      start_period: 120s
+      retries: 3
+
+  loop-runner:
+    image: {{ oj_web_image }}
+    container_name: {{ oj_loop_runner_container }}
+    restart: unless-stopped
+    # Straight to the loop: no migrations, no seed, no HTTP server. The app
+    # container owns those, and running them twice at once helps nobody.
+    entrypoint: ["node"]
+    command: ["/app/ops/sweeper.mjs"]
+    env_file:
+      - path: {{ oj_compose_dir }}/web.env
+        required: true
+    networks:
+      # The queue it works through, and the machines it hands work to. It serves
+      # nothing, so it is not on the proxy's network.
+      db:
+      tunnels:
+    healthcheck:
+      # It serves nothing, so the only honest check is that the loop still exists.
+      test: ["CMD-SHELL", "pgrep -f ops/sweeper.mjs > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    # Node is PID 1 here, so SIGTERM reaches the loop's own handler: it finishes
+    # the pass it is in, closes the database connection and exits 0.
+    stop_grace_period: 30s
+
+networks:
+  ingress:
+    external: true
+    name: {{ oj_ingress_network }}
+  db:
+    external: true
+    name: {{ oj_db_network }}
+  tunnels:
+    external: true
+    name: {{ oj_tunnels_network }}

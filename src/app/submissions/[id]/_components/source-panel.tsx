@@ -59,7 +59,7 @@ export function SourcePanel({ problemSlug, submissionId, language, sourceCode }:
   }
 
   return (
-    <div className='flex flex-col gap-3 rounded-xl border border-border bg-card p-4'>
+    <div className='card flex flex-col gap-3 p-4'>
       <div className='flex flex-wrap items-center justify-between gap-2'>
         <h2 className='font-medium text-sm'>Source code ({formatLanguageLabel(language)})</h2>
         <div className='flex items-center gap-2'>

@@ -13,11 +13,18 @@ import { ThemeToggle } from './theme-toggle'
  */
 export function SiteHeader() {
   return (
-    <header className='border-border border-b'>
-      <div className='mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-4 px-6 py-4'>
-        <div className='flex flex-wrap items-center gap-6'>
-          <Link href='/' className='font-semibold text-lg tracking-tight'>
-            Online Judge
+    <header className='sticky top-0 z-40 border-border/80 border-b bg-card/90 backdrop-blur'>
+      <div className='mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6'>
+        <div className='flex min-w-0 flex-wrap items-center gap-x-8 gap-y-2'>
+          <Link
+            href='/'
+            className='flex items-center gap-2 font-semibold tracking-tight'
+            aria-label='Online Judge, home'
+          >
+            <span className='flex size-8 items-center justify-center rounded-lg bg-accent font-bold text-accent-foreground text-sm'>
+              OJ
+            </span>
+            <span className='hidden sm:inline'>Online Judge</span>
           </Link>
           <SiteNav />
         </div>

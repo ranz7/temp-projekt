@@ -1,0 +1,54 @@
+---
+# Capability: authorize-app-ssh-key
+# Problem: the application machine's key has to be accepted by every checker,
+# and by nothing else.
+#
+# The key is installed with the narrowest options SSH has: it may open one
+# forward, to this machine's own checker port, and nothing else.
+#
+#   restrict         turns everything off - agent, X11, tty, user rc
+#   port-forwarding  gives back forwarding alone
+#   permitopen       and only to this machine's checker port
+#   command          and any session that is opened anyway runs /bin/false
+#
+# `restrict` on its own still lets `ssh machine some-command` run, which is why
+# the forced command is there. The tunnel asks for no session at all (`ssh -N`),
+# so it never meets it. Someone holding this key reaches the checker service and
+# cannot reach the machine.
+
+- name: Require the application machine's public key
+  ansible.builtin.assert:
+    that:
+      - oj_app_public_key | default('') | length > 0
+    fail_msg: >-
+      The application machine's public key is not known. Run the whole playbook
+      (`make deploy`) rather than only the checker part.
+
+- name: Let the application machine open its tunnel, and nothing else
+  ansible.posix.authorized_key:
+    user: "{{ ansible_user }}"
+    key: "{{ oj_app_public_key }}"
+    comment: online-judge-app
+    key_options: 'restrict,port-forwarding,permitopen="127.0.0.1:{{ oj_checker_service_port }}",command="/bin/false"'
+    state: present
+    exclusive: false
+
+# Ubuntu and Debian allow it out of the box. A machine where it was turned off
+# accepts the key, refuses the forward, and would look like a checker that is
+# simply never reachable - so it is said plainly here instead.
+- name: Refuse a machine whose SSH refuses port forwarding
+  ansible.builtin.command:
+    cmd: /usr/sbin/sshd -T
+  register: oj_sshd_effective
+  changed_when: false
+  failed_when: false
+
+- name: Say so when SSH would refuse the tunnel
+  ansible.builtin.assert:
+    that:
+      - "'allowtcpforwarding no' not in oj_sshd_effective.stdout | lower"
+    fail_msg: >-
+      {{ inventory_hostname }} has AllowTcpForwarding off in /etc/ssh/sshd_config.
+      The application machine cannot open its tunnel to this checker until that
+      is turned back on.
+  when: oj_sshd_effective.rc == 0

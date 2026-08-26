@@ -11,7 +11,8 @@ const handler = (req: NextRequest) => {
     endpoint: '/api/trpc',
     req,
     router: appRouter,
-    createContext: opts => createTRPCContext({ headers, resHeaders: opts.resHeaders }),
+    createContext: opts =>
+      createTRPCContext({ headers, resHeaders: opts.resHeaders, url: req.url }),
     onError: isDevelopment()
       ? ({ path, error }) => {
           console.error(`tRPC failed on ${path ?? '<no-path>'}: ${error.message}`)

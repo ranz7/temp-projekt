@@ -12,7 +12,7 @@ export function SubmissionOverview({ submission }: SubmissionOverviewProps) {
   const isPending = submission.status === 'queued' || submission.status === 'running'
 
   return (
-    <div className='flex flex-col gap-4 rounded-xl border border-border bg-card p-4'>
+    <div className='card flex flex-col gap-4 p-4 sm:p-5'>
       <div className='flex flex-wrap items-center justify-between gap-3'>
         <div className='flex flex-col gap-1'>
           <Link
@@ -40,13 +40,13 @@ export function SubmissionOverview({ submission }: SubmissionOverviewProps) {
         </div>
       </dl>
       {isPending ? (
-        <p className='rounded-lg bg-placeholder px-3 py-2 text-sm'>
+        <p className='rounded-md bg-tint-blue px-3 py-2 text-tint-blue-ink text-xs ring-1 ring-tint-blue-ring ring-inset'>
           {submission.status === 'queued' ? 'Waiting in the queue.' : 'Being judged right now.'}{' '}
           This page refreshes automatically every second.
         </p>
       ) : null}
       {submission.judgeMessage !== null ? (
-        <p className='rounded-lg border border-border px-3 py-2 text-muted text-sm'>
+        <p className='rounded-md border border-border px-3 py-2 text-muted text-sm'>
           {submission.judgeMessage}
         </p>
       ) : null}

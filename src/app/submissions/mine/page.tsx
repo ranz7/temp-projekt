@@ -31,7 +31,7 @@ export default async function MySubmissionsPage({ searchParams }: MySubmissionsP
   )
 
   return (
-    <main className='mx-auto flex w-full max-w-5xl flex-col gap-6 p-6'>
+    <div className='flex flex-col gap-6'>
       <PageHeader
         title='My submissions'
         description='Everything you have submitted, most recent first.'
@@ -45,6 +45,6 @@ export default async function MySubmissionsPage({ searchParams }: MySubmissionsP
           basePath='/submissions/mine'
         />
       ) : null}
-    </main>
+    </div>
   )
 }

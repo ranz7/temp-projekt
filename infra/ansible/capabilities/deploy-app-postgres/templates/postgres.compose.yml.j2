@@ -1,0 +1,32 @@
+# Managed by Ansible capability deploy-app-postgres.
+#
+# No published port at all: Postgres sits on the internal `oj-db` network, where
+# the app reaches it by the alias `postgres`. Nothing else on the machine, and
+# nothing on the internet, can open a connection to it.
+name: online-judge-postgres
+
+services:
+  postgres:
+    image: {{ oj_postgres_image }}
+    container_name: {{ oj_postgres_container }}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${OJ_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${OJ_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${OJ_POSTGRES_DB}
+    volumes:
+      - {{ oj_data_dir }}/postgres:/var/lib/postgresql/data
+    networks:
+      db:
+        aliases: [postgres]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 12
+
+networks:
+  db:
+    external: true
+    name: {{ oj_db_network }}

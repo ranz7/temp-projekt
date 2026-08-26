@@ -4,9 +4,10 @@ Single source for all agents — `AGENTS.md` points here. Skills: canonical `.ag
 
 ## What this is
 
-An online judge: people submit Python or C++ solutions to programming problems, watch them being judged, and compete in a global ranking.
-The app runs on one Next.js server that owns Postgres and Redis; checker workers run on separate machines and stay stateless.
-Python submissions are judged inside a bubblewrap sandbox; C++ is handed to OIOIOI, a separate service.
+An online judge: people submit Python or C++ solutions to four programming problems, watch them being judged, and compete in a global ranking.
+The app runs on one Next.js server that owns Postgres; checker machines run separate services.
+Both Python and C++ are judged inside a bubblewrap sandbox on the checker machines.
+A loop runner process syncs machines, hands waiting submissions to machines that are online and available, and collects results; without it running, submissions sit in the queue forever.
 
 ## Lanes
 
@@ -24,6 +25,7 @@ Human sits in two seats: confirm the spec, final review - human merges (squash).
 - **Language**: TypeScript strict mode
 - **API**: tRPC v11, superjson
 - **Database**: PostgreSQL 17 (Docker) + Drizzle ORM
+- **Loop runner**: Python, runs in the app container, dispatches work and collects results
 - **Testing**: Vitest — unit + integration against a real database
 - **Frontend**: React 19, Tailwind v4
 - **Tooling**: Biome, bun
@@ -38,7 +40,7 @@ bun run format              # Biome format --write
 bun run typecheck           # tsc --noEmit
 bun run db:up / db:down     # Start / stop local Postgres (Docker)
 bun run db:migrate          # Apply migrations
-bun run db:seed             # Seed the Watermelon problem if empty
+bun run db:seed             # Seed the four problems if empty
 bun run stack:up            # docker compose up -d --build
 bun run stack:down          # Stop all containers
 bun run test                # Unit
@@ -80,20 +82,23 @@ src/
 │   ├── page.tsx         problems list with recent submissions
 │   ├── problems/        problem detail + submit editor
 │   ├── ranking/         global and per-problem rankings
+│   ├── admin/           operator panel: machines, batch submit
 │   ├── submissions/     submission detail (my submissions)
 │   ├── _components/     shared UI components
 │   ├── _trpc/           client, RSC caller, query client
 │   └── api/trpc/        tRPC handler
 ├── shared/              environment helpers
 └── backend/
-    ├── appRouter.ts     { account, task, submission, ranking }
+    ├── appRouter.ts     { account, task, submission, ranking, machine, benchmark }
     ├── trpc/            init, context, publicProcedure
     ├── database/        db, schema barrel, migrations, seed
     └── modules/
         ├── account/     username login + session
         ├── task/        problem list + detail reads
-        ├── submission/  submit, judge, list, sweeper
-        └── ranking/     global + per-problem rankings
+        ├── submission/  submit, judge, list, queued submissions
+        ├── ranking/     global + per-problem rankings
+        ├── machine/     machine registry, health, dispatching
+        └── benchmark/   admin batch submission
 ```
 
 Path aliases: `@backend/*` → `src/backend/*`, `@shared/*` → `src/shared/*`, `@/*` → `src/*`.
@@ -101,25 +106,27 @@ Path aliases: `@backend/*` → `src/backend/*`, `@shared/*` → `src/shared/*`, 
 ## Deployables
 
 **Web server** (`deploy/web/Dockerfile`):
-- Next.js app, tRPC API, checker endpoints, login session.
-- Owns Postgres 17 and Redis.
+- Next.js app: UI, tRPC API, admin panel, login session.
+- Owns Postgres 17.
 - One instance per environment.
-- Sweeper process re-announces expired submissions.
+- Loop runner (in same container): syncs machines, dispatches work, collects results.
 
-**Checker workers** (`deploy/checker/Dockerfile.bwrap`, `Dockerfile.cpp`):
-- Stateless Python processes; many replicas per environment.
-- Python checker claims and judges Python submissions inside bubblewrap.
-- C++ checker claims C++ submissions, submits to OIOIOI, polls for results.
-- No disk state except scratch directory deleted after each job.
+**Loop runner** (same image as web):
+- One per environment; without it, submissions stay queued forever.
+- Polls machines for health, hands waiting submissions to available machines, reads back results.
+- Runs three internal loops: health (every 5 seconds), dispatch (every 1 second), collect (every 2 seconds).
 
-**OIOIOI** (separate, optional):
-- External service outside this repository.
-- C++ checker calls it; left unconfigured, C++ submissions stay queued with a readable reason.
+**Checker machines** (`deploy/checker/Dockerfile.bwrap`):
+- One service per machine, stateless, reaches app through SSH tunnel only.
+- Python service with bubblewrap: judges Python and C++ submissions inside sandbox with CPU and memory limits.
+- Answers health checks (no key needed), judge requests, and result reads (both key-protected).
+- No test data in the image: reads from disk during judging.
+- Scratch directory deleted after each job.
 
 ## Language support
 
-- **Python**: judges code inside bubblewrap sandbox with CPU and memory limits.
-- **C++**: submits to OIOIOI and translates the verdict back.
+- **Python**: every checker judges Python code inside bubblewrap sandbox with CPU and memory limits.
+- **C++**: every checker compiles and runs C++ code in the same sandbox.
 - **Other**: refused at submit time with a validation error.
 
 **Full specs:**
@@ -134,9 +141,9 @@ Only `a-z`, `0-9`, `-`, `_`, `.`. Endpoint directories are kebab-case verb-noun 
 ## Environment variables
 
 See the environment variable table in `README.md`.
-Every setting comes from `.env` (root) or `deploy/<service>/.env` (per-service), layered over `.env.example`.
-`SERVICE_KEY` must match between `deploy/web/.env*` and `deploy/checker/.env*` byte-for-byte.
-No secrets go in git.
+Settings come from `.env` (root, for local dev and Docker Compose) or `deploy/<service>/.env` (per-service, production), layered over `.env.example`.
+`SERVICE_KEY` must match between app and all checkers byte-for-byte; mismatches silently refuse every call.
+All secrets stay in `.env` (gitignored), never in `.env.example`.
 
 ## Agent Context
 

@@ -25,8 +25,12 @@ export type SubmissionLanguage = (typeof SUBMISSION_LANGUAGES)[number]
 export const TEST_VISIBILITIES = ['public', 'hidden'] as const
 export type TestVisibility = (typeof TEST_VISIBILITIES)[number]
 
-/** `token` compares output ignoring whitespace; `custom` runs the package's checker script. */
-export const CHECKER_TYPES = ['token', 'custom'] as const
+/**
+ * `token` compares output ignoring whitespace, `custom` runs the package's checker
+ * script, and `grader` means the package's own grader is built into the submission
+ * and its word is the verdict - nothing is compared against an expected file.
+ */
+export const CHECKER_TYPES = ['token', 'custom', 'grader'] as const
 export type CheckerType = (typeof CHECKER_TYPES)[number]
 
 export const task__problem_ = pgTable(
@@ -37,6 +41,8 @@ export const task__problem_ = pgTable(
     code_: varchar({ length: 32 }).notNull(),
     title_: varchar({ length: 256 }).notNull(),
     statement_: text().notNull(),
+    // The whole statement.md of the package, rendered as Markdown on the problem page.
+    statement_markdown_: text(),
     statement_input_: text(),
     statement_output_: text(),
     statement_notes_: text(),

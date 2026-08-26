@@ -1,0 +1,17 @@
+---
+# Capability: bootstrap-python
+# Problem: every other Ansible module needs Python on the machine, and a fresh
+# cloud image may not have it. `raw` is the one thing that runs without it.
+
+- name: Install Python when the machine has none
+  ansible.builtin.raw: |
+    if command -v python3 >/dev/null 2>&1; then
+      echo PYTHON_PRESENT
+      exit 0
+    fi
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y python3
+    echo PYTHON_INSTALLED
+  register: oj_python_bootstrap
+  changed_when: "'PYTHON_INSTALLED' in oj_python_bootstrap.stdout"

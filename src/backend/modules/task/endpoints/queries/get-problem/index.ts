@@ -21,6 +21,7 @@ export const getProblemProcedure = publicProcedure
         code: task__problem_.code_,
         title: task__problem_.title_,
         statement: task__problem_.statement_,
+        statementMarkdown: task__problem_.statement_markdown_,
         statementInput: task__problem_.statement_input_,
         statementOutput: task__problem_.statement_output_,
         statementNotes: task__problem_.statement_notes_,

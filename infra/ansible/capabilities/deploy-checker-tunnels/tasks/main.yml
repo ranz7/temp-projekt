@@ -1,0 +1,189 @@
+---
+# Capability: deploy-checker-tunnels
+# Problem: the checkers listen on their own loopback and nothing is exposed on
+# them, so the app has to come to them - and the app runs in a container, which
+# cannot use the machine's own loopback without host networking.
+#
+# One container holds every forward and joins the app's network under the name
+# `tunnels`. The app asks tunnels:9001 and reaches checker-01's own port 8080,
+# through SSH, over the port that was already open. No firewall rule is added
+# anywhere, on any machine.
+
+- name: Ensure the tunnel build directory
+  ansible.builtin.file:
+    path: "{{ oj_ops_root }}/tunnels"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Copy the tunnel scripts
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ oj_ops_root }}/tunnels/{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - tunnels-entrypoint.sh
+    - tunnel-supervisor.sh
+    - tunnels-health.sh
+  register: oj_tunnel_scripts
+
+- name: Render the tunnel image's Dockerfile
+  ansible.builtin.template:
+    src: Dockerfile.j2
+    dest: "{{ oj_ops_root }}/tunnels/Dockerfile"
+    owner: root
+    group: root
+    mode: "0644"
+  register: oj_tunnel_dockerfile
+
+- name: Pull the pinned Alpine base
+  ansible.builtin.command:
+    cmd: docker pull {{ oj_alpine_image }}
+  register: oj_alpine_pull
+  changed_when: >-
+    ('Downloaded newer image' in oj_alpine_pull.stdout)
+    or ('Pull complete' in oj_alpine_pull.stdout)
+
+- name: Look for the tunnel image of this commit
+  ansible.builtin.command:
+    cmd: docker image inspect {{ oj_tunnels_image }}
+  register: oj_tunnels_image_present
+  changed_when: false
+  failed_when: false
+
+- name: Build the tunnel image
+  ansible.builtin.command:
+    cmd: docker build -t {{ oj_tunnels_image }} {{ oj_ops_root }}/tunnels
+  when: >-
+    oj_tunnels_image_present.rc != 0
+    or (oj_tunnel_scripts is changed)
+    or (oj_tunnel_dockerfile is changed)
+    or (oj_force_rebuild | bool)
+  changed_when: true
+
+# Learned once, from this machine, and pinned after that: the tunnels run with
+# StrictHostKeyChecking=yes, so a checker whose key changes is refused rather
+# than trusted quietly.
+- name: Read every checker's SSH host key
+  ansible.builtin.command:
+    cmd: ssh-keyscan -T 10 -t ed25519,ecdsa,rsa {{ oj_checker_machines | map(attribute='address') | join(' ') }}
+  register: oj_keyscan
+  changed_when: false
+
+- name: Refuse to write a tunnel list nothing answered for
+  ansible.builtin.assert:
+    that:
+      - oj_keyscan.stdout_lines | reject('match', '^#') | list | length > 0
+    fail_msg: >-
+      No checker answered on SSH from the application machine. Nothing could be
+      judged, so the run stops here.
+
+# One machine being down should not stop the other twelve being deployed. Its
+# tunnel keeps dialling, and the next run learns its key.
+- name: Name the machines whose host key did not come back
+  ansible.builtin.debug:
+    msg: >-
+      No SSH host key came back from {{ item.name }} ({{ item.address }}). Its
+      tunnel will not connect until a later run reaches it.
+  loop: "{{ oj_checker_machines }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: oj_keyscan.stdout is not search(item.address)
+
+- name: Write the known hosts the tunnels trust
+  ansible.builtin.copy:
+    # Sorted, so a re-run that learns the same keys writes the same file.
+    content: "{{ oj_keyscan.stdout_lines | reject('match', '^#') | sort | join('\n') }}\n"
+    dest: "{{ oj_known_hosts_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: oj_known_hosts_written
+
+- name: Render the tunnel list
+  ansible.builtin.template:
+    src: tunnels.conf.j2
+    dest: "{{ oj_compose_dir }}/tunnels.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  register: oj_tunnels_conf
+
+- name: Render the tunnel Compose file
+  ansible.builtin.template:
+    src: tunnels.compose.yml.j2
+    dest: "{{ oj_compose_dir }}/tunnels.compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Start the tunnels
+  ansible.builtin.command:
+    cmd: >-
+      docker compose
+      --project-directory {{ oj_compose_dir }}
+      -f {{ oj_compose_dir }}/tunnels.compose.yml
+      up -d --remove-orphans
+  register: oj_tunnels_up
+  changed_when: >-
+    ('Created' in oj_tunnels_up.stderr)
+    or ('Started' in oj_tunnels_up.stderr)
+    or ('Recreated' in oj_tunnels_up.stderr)
+
+# Both files are mounted, so the container reads them once, at start. Compose
+# sees no change in its own file and would leave the old tunnels running.
+- name: Recreate the tunnels when the list or the trusted keys changed
+  ansible.builtin.command:
+    cmd: >-
+      docker compose
+      --project-directory {{ oj_compose_dir }}
+      -f {{ oj_compose_dir }}/tunnels.compose.yml
+      up -d --force-recreate
+  when: >-
+    ((oj_tunnels_conf is changed) or (oj_known_hosts_written is changed))
+    and (oj_tunnels_up is not changed)
+  changed_when: true
+
+# Asked from a throwaway container on the app's own network, which is exactly
+# how the app asks. A machine that does not answer is not a reason to stop: the
+# app gives work only to machines that do, and this one keeps dialling.
+- name: Ask every tunnel whether its checker answers
+  ansible.builtin.shell: |
+    set -eu
+    for _ in $(seq 1 10); do
+      answer=$(docker run --rm --network {{ oj_tunnels_network }} {{ oj_alpine_image }} \
+                 wget -q -T 5 -O - http://tunnels:{{ item.localPort }}/health || true)
+      case "$answer" in
+        *'"ok"'*) exit 0 ;;
+      esac
+      sleep 3
+    done
+    exit 1
+  args:
+    executable: /bin/bash
+  register: oj_tunnel_probe
+  failed_when: false
+  changed_when: false
+  loop: "{{ oj_checker_machines }}"
+  loop_control:
+    label: "{{ item.name }} on tunnels:{{ item.localPort }}"
+
+- name: Say which machines answered through their tunnel
+  ansible.builtin.debug:
+    msg: >-
+      {{ oj_tunnel_probe.results | selectattr('rc', 'equalto', 0) | list | length }}
+      of {{ oj_checker_machines | length }} checkers answer through their tunnel.
+      {% set silent = oj_tunnel_probe.results | rejectattr('rc', 'equalto', 0)
+                      | map(attribute='item.name') | list %}
+      {{ 'Silent: ' ~ (silent | join(', ')) if silent | length > 0 else '' }}
+
+- name: Refuse a deployment where no checker can be reached
+  ansible.builtin.assert:
+    that:
+      - oj_tunnel_probe.results | selectattr('rc', 'equalto', 0) | list | length > 0
+    fail_msg: >-
+      No checker answers through its tunnel, so nothing could be judged. Check
+      the checker containers and `docker logs {{ oj_tunnels_container }}`.

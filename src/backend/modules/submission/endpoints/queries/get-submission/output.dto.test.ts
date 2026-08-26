@@ -8,7 +8,8 @@ const hiddenEntry = {
   passed: false,
   pointsAwarded: 0,
   timeMs: 12,
-  memoryKb: 4096
+  memoryKb: 4096,
+  presses: null
 }
 
 const publicEntry = {
@@ -19,6 +20,7 @@ const publicEntry = {
   pointsAwarded: 0,
   timeMs: 10,
   memoryKb: 2048,
+  presses: null,
   input: '8\n',
   expectedOutput: 'YES\n',
   actualOutput: 'YES\n',
@@ -26,7 +28,7 @@ const publicEntry = {
 }
 
 describe('SubmissionTestDTOZ', () => {
-  it('accepts a hidden test showing only its number, verdict, time and memory', () => {
+  it('accepts a hidden test showing only its number, verdict, time, memory and presses', () => {
     const result = SubmissionTestDTOZ.safeParse(hiddenEntry)
 
     expect(result.success).toBe(true)
@@ -35,10 +37,28 @@ describe('SubmissionTestDTOZ', () => {
       'ordinal',
       'passed',
       'pointsAwarded',
+      'presses',
       'timeMs',
       'verdict',
       'visibility'
     ])
+  })
+
+  it('lets a hidden test carry the press count its grader reported', () => {
+    const result = SubmissionTestDTOZ.safeParse({ ...hiddenEntry, presses: 7 })
+
+    expect(result.success).toBe(true)
+    expect(result.success && result.data.presses).toBe(7)
+  })
+
+  it('still refuses a hidden test that smuggles a leak in beside the press count', () => {
+    const result = SubmissionTestDTOZ.safeParse({
+      ...hiddenEntry,
+      presses: 7,
+      actualOutput: 'leaked\n'
+    })
+
+    expect(result.success).toBe(false)
   })
 
   it('refuses a hidden test that carries what the solution printed', () => {

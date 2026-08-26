@@ -1,6 +1,6 @@
 #!/bin/sh
-# Hands the worker a writable cgroup v2 tree when the container was given enough
-# privilege for one, then gets out of the way.
+# Hands the sandbox a writable cgroup v2 tree when the container was given enough
+# privilege for one, then starts the checker service.
 #
 # A container's own cgroup starts read-only and holds this very process, and
 # cgroup v2 refuses to delegate controllers out of a cgroup that holds processes.
@@ -24,11 +24,13 @@ prepare_cgroups() {
 }
 
 if prepare_cgroups; then
-  echo "[bwrap] cgroup v2 is writable: memory and process limits are enforced."
+  echo "[checker] cgroup v2 is writable: memory and process limits are enforced."
 else
-  echo "[bwrap] No writable cgroup v2 tree. Limits fall back to the wall-clock kill and to measured resource usage. See deploy/README.md."
+  echo "[checker] No writable cgroup v2 tree. Limits fall back to the wall-clock kill and to measured resource usage. See deploy/README.md."
 fi
 
 mkdir -p "${CHECKER_SCRATCH_PATH:-/scratch}"
 
-exec python3 -m bwrap "$@"
+# The HTTP service, not the old pull-based worker: the app calls this machine.
+# exec, so Python is PID 1 and SIGTERM reaches the service's own handler.
+exec python3 -m common "$@"

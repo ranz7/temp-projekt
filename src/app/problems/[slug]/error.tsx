@@ -9,15 +9,11 @@ export default function ProblemError({
   reset: () => void
 }) {
   return (
-    <main className='mx-auto flex w-full max-w-6xl flex-col gap-6 p-6'>
+    <div className='flex flex-col gap-6'>
       <ErrorState description="This problem couldn't load. Try refreshing." />
-      <button
-        type='button'
-        onClick={reset}
-        className='self-start rounded-lg border border-border px-3 py-2 font-medium text-sm hover:bg-placeholder'
-      >
+      <button type='button' onClick={reset} className='btn-secondary self-start'>
         Try again
       </button>
-    </main>
+    </div>
   )
 }

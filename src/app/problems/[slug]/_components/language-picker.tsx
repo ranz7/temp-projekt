@@ -12,12 +12,12 @@ type LanguagePickerProps = {
 /** Python and C++ only - the only two languages any problem in this judge accepts. */
 export function LanguagePicker({ languages, value, onChange }: LanguagePickerProps) {
   return (
-    <label className='flex flex-col gap-1.5 text-sm'>
-      <span className='font-medium'>Language</span>
+    <label className='flex min-w-32 flex-1 flex-col gap-1 font-medium text-muted text-xs'>
+      Language
       <select
         value={value}
         onChange={event => onChange(event.target.value as SubmissionLanguage)}
-        className='rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-accent'
+        className='field'
       >
         {languages.map(language => (
           <option key={language} value={language}>

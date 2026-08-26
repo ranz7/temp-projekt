@@ -1,53 +1,69 @@
+'use client'
+
 import type { ProblemListItemDTO } from '@backend/modules/task/endpoints/queries/list-problems/output.dto'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { DataTable } from '@/app/_components/data-table'
 import { DifficultyBadge } from './difficulty-badge'
 
-/** The problem list table: code, title, difficulty, tags, kind and solve count. */
+/**
+ * The problem list: each row is one problem and opens it.
+ *
+ * A row cannot be wrapped in a link - a `<tr>` must sit directly under the
+ * table - so the row itself navigates on click and on Enter.
+ */
 export function ProblemTable({ problems }: { problems: ProblemListItemDTO[] }) {
+  const router = useRouter()
+
   return (
     <DataTable>
       <thead>
-        <tr className='border-border border-b text-left text-muted text-xs'>
-          <th className='px-3 py-2 font-medium'>Code</th>
-          <th className='px-3 py-2 font-medium'>Title</th>
-          <th className='px-3 py-2 font-medium'>Difficulty</th>
-          <th className='px-3 py-2 font-medium'>Tags</th>
-          <th className='px-3 py-2 font-medium'>Kind</th>
-          <th className='px-3 py-2 text-right font-medium'>Solves</th>
+        <tr>
+          <th className='th'>Task</th>
+          <th className='th'>Difficulty / kind</th>
+          <th className='th'>Tags</th>
+          <th className='th'>Solves</th>
         </tr>
       </thead>
-      <tbody>
-        {problems.map(problem => (
-          <tr key={problem.id} className='border-border border-b last:border-0'>
-            <td className='px-3 py-2 font-mono text-xs text-muted'>{problem.code}</td>
-            <td className='px-3 py-2'>
-              {/* One link per row, not one per cell - a second <Link> to the same
-                  href doubles that route's prefetch traffic for no benefit. */}
-              <Link href={`/problems/${problem.slug}`} className='text-accent hover:underline'>
-                {problem.title}
-              </Link>
-            </td>
-            <td className='px-3 py-2'>
-              <DifficultyBadge difficulty={problem.difficulty} />
-            </td>
-            <td className='px-3 py-2'>
-              <div className='flex flex-wrap gap-1'>
-                {problem.tags.length === 0 ? (
-                  <span className='text-muted text-xs'>-</span>
-                ) : (
-                  problem.tags.map(tag => (
-                    <span key={tag} className='rounded-full bg-placeholder px-2 py-0.5 text-xs'>
+      <tbody className='divide-y divide-divider'>
+        {problems.map(problem => {
+          const href = `/problems/${problem.slug}`
+
+          return (
+            <tr
+              key={problem.id}
+              className='tr cursor-pointer'
+              onClick={() => router.push(href)}
+              onKeyDown={event => {
+                if (event.key === 'Enter') router.push(href)
+              }}
+              tabIndex={0}
+              aria-label={`${problem.code} ${problem.title}`}
+            >
+              <td className='td'>
+                <div className='inline-flex flex-col gap-0.5'>
+                  <span className='task-code'>{problem.code}</span>
+                  <span className='task-title'>{problem.title}</span>
+                </div>
+              </td>
+              <td className='td'>
+                <div className='flex flex-wrap items-center gap-1.5'>
+                  <DifficultyBadge difficulty={problem.difficulty} />
+                  <span className='tag capitalize'>{problem.kind}</span>
+                </div>
+              </td>
+              <td className='td'>
+                <div className='flex flex-wrap gap-1'>
+                  {problem.tags.map(tag => (
+                    <span key={tag} className='tag'>
                       {tag}
                     </span>
-                  ))
-                )}
-              </div>
-            </td>
-            <td className='px-3 py-2 text-muted text-xs'>{problem.kind}</td>
-            <td className='px-3 py-2 text-right'>{problem.solveCount}</td>
-          </tr>
-        ))}
+                  ))}
+                </div>
+              </td>
+              <td className='td text-muted tabular-nums'>{problem.solveCount}</td>
+            </tr>
+          )
+        })}
       </tbody>
     </DataTable>
   )

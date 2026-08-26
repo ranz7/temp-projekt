@@ -1,7 +1,9 @@
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { appRouter } from '@backend/appRouter'
 import { db } from '@backend/database/db'
 import { task__problem_ } from '@backend/modules/task/schema'
-import { seedTaskProblems } from '@backend/modules/task/seed'
+import { getProblemPackagesPath, seedTaskProblems } from '@backend/modules/task/seed'
 import { createCallerFactory, createTRPCContext } from '@backend/trpc'
 import { like } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -10,6 +12,8 @@ const createCaller = createCallerFactory(appRouter)
 
 const SLUG_PREFIX = 'itest-getproblem-'
 const UNPUBLISHED_SLUG = `${SLUG_PREFIX}hidden`
+/** A problem that predates Markdown statements, so it has none. */
+const NO_MARKDOWN_SLUG = `${SLUG_PREFIX}nomarkdown`
 const SEEDED_PROBLEM_SLUG = 'cf-4-A'
 const HIDDEN_TEST_COUNT = 20
 /** A file name that exists only on the checkers' filesystem. It must never be in a response. */
@@ -42,6 +46,23 @@ beforeAll(async () => {
     memory_limit_mb_: 64,
     package_dir_: UNPUBLISHED_SLUG,
     is_published_: false
+  })
+  await db.insert(task__problem_).values({
+    slug_: NO_MARKDOWN_SLUG,
+    code_: 'IGP-N1',
+    title_: 'Itest Without Markdown',
+    statement_: 'Only the old sections.',
+    statement_input_: 'One number.',
+    statement_output_: 'One word.',
+    difficulty_: 'easy',
+    tags_: [],
+    kind_: 'stdio',
+    io_mode_: 'stdio',
+    languages_: ['python'],
+    time_limit_ms_: 1000,
+    memory_limit_mb_: 64,
+    package_dir_: NO_MARKDOWN_SLUG,
+    is_published_: true
   })
 })
 
@@ -89,6 +110,32 @@ describe('task.getProblem', () => {
     expect(serialised).not.toContain('output_member_')
     // The only test data anywhere in the answer belongs to the public sample.
     expect(serialised.split('"expectedOutput"')).toHaveLength(2)
+  })
+
+  it('hands the page the whole statement, code fences and all', async () => {
+    const trpc = await caller()
+    const statementMarkdown = await readFile(
+      join(getProblemPackagesPath(), 'combo', 'statement.md'),
+      'utf8'
+    )
+    const [, fencedCodeBlock] = statementMarkdown.split('```')
+
+    const problem = await trpc.task.getProblem({ slug: 'combo' })
+
+    expect(fencedCodeBlock).toContain('guess_sequence')
+    expect(problem.statementMarkdown).toBe(statementMarkdown)
+    expect(problem.statementMarkdown ?? '').toContain(`\`\`\`${fencedCodeBlock}\`\`\``)
+  })
+
+  it('says so plainly when a problem has no Markdown statement', async () => {
+    const trpc = await caller()
+
+    const problem = await trpc.task.getProblem({ slug: NO_MARKDOWN_SLUG })
+
+    expect(problem.statementMarkdown).toBeNull()
+    // The page falls back to these, so they still travel.
+    expect(problem.statement).toBe('Only the old sections.')
+    expect(problem.statementInput).toBe('One number.')
   })
 
   it('refuses a slug nobody has', async () => {

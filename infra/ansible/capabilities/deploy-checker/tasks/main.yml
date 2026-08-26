@@ -1,0 +1,112 @@
+---
+# Capability: deploy-checker
+# Problem: this machine has to judge submissions the application machine sends
+# it, and be invisible to everyone else.
+#
+# The image is built here from deploy/checker/Dockerfile.bwrap, because there is
+# no registry in this deployment. It is tagged with the commit, so the same
+# commit twice builds nothing and recreates nothing.
+
+- name: Look for the checker image of this commit
+  ansible.builtin.command:
+    cmd: docker image inspect {{ oj_checker_image }}
+  register: oj_checker_image_present
+  changed_when: false
+  failed_when: false
+
+- name: Build the checker image
+  ansible.builtin.command:
+    cmd: >-
+      docker build
+      -f {{ oj_src_dir }}/deploy/checker/Dockerfile.bwrap
+      -t {{ oj_checker_image }}
+      {{ oj_src_dir }}
+  when: oj_checker_image_present.rc != 0 or oj_force_rebuild | bool
+  changed_when: true
+
+- name: Render the checker env file
+  ansible.builtin.template:
+    src: checker.env.j2
+    dest: "{{ oj_compose_dir }}/checker.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Render the checker Compose file
+  ansible.builtin.template:
+    src: checker.compose.yml.j2
+    dest: "{{ oj_compose_dir }}/checker.compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Start the checker
+  ansible.builtin.command:
+    cmd: >-
+      docker compose
+      --project-directory {{ oj_compose_dir }}
+      -f {{ oj_compose_dir }}/checker.compose.yml
+      up -d --remove-orphans
+  register: oj_checker_up
+  changed_when: >-
+    ('Created' in oj_checker_up.stderr)
+    or ('Started' in oj_checker_up.stderr)
+    or ('Recreated' in oj_checker_up.stderr)
+
+- name: Wait until the checker answers on this machine's loopback
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ oj_checker_service_port }}/health"
+    status_code: 200
+  register: oj_checker_health
+  retries: 30
+  delay: 2
+  until: oj_checker_health.status | default(0) == 200
+  changed_when: false
+
+- name: Refuse a checker that cannot see the problem packages
+  ansible.builtin.assert:
+    that:
+      - oj_checker_health.json.problems | default([]) | length > 0
+    fail_msg: >-
+      {{ inventory_hostname }} answers /health but reports no problem packages.
+      Check {{ oj_problems_dir }} on the machine.
+
+# A machine whose /health says it is well but whose sandbox will not start is
+# the worst state there is: the app keeps giving it submissions and every one
+# comes back a runtime error. So the sandbox is started here, once, bare - the
+# same namespaces, pivot_root, /proc and loopback a real submission needs - and
+# a machine that cannot manage it is refused rather than left in the fleet.
+- name: Start a bare sandbox inside the checker
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - "{{ oj_checker_container }}"
+      - /usr/bin/bwrap
+      - --ro-bind
+      - /
+      - /
+      - --proc
+      - /proc
+      - --dev
+      - /dev
+      - --unshare-all
+      - --die-with-parent
+      - /bin/true
+  register: oj_sandbox_probe
+  changed_when: false
+  failed_when: false
+
+- name: Refuse a machine that answers but cannot judge anything
+  ansible.builtin.assert:
+    that:
+      - oj_sandbox_probe.rc == 0
+    fail_msg: >-
+      The sandbox will not start on {{ inventory_hostname }}, so every submission
+      sent there would come back a runtime error. bubblewrap said:
+      {{ (oj_sandbox_probe.stderr | default('') | trim) or 'nothing' }}.
+      deploy/README.md lists what each grant in the checker's compose file saves
+      you from; on Ubuntu the two that matter are apparmor=unconfined and
+      systempaths=unconfined.
+    success_msg: "The sandbox starts: this machine can judge."

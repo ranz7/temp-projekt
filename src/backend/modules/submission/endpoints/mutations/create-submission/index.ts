@@ -1,4 +1,3 @@
-import { publishSubmissionWakeUp } from '@backend/modules/submission/internal-functions/queue'
 import { submission__submission_ } from '@backend/modules/submission/schema'
 import {
   SUBMISSION_LANGUAGES,
@@ -71,16 +70,7 @@ export const createSubmissionProcedure = protectedProcedure
         status: submission__submission_.status_
       })
 
-    // The wake-up only makes judging start sooner. A Redis that is down leaves
-    // `queue_published_at_` empty and the sweeper publishes the submission later.
-    const published = await publishSubmissionWakeUp(submission.id)
-
-    if (published) {
-      await ctx.db
-        .update(submission__submission_)
-        .set({ queue_published_at_: new Date() })
-        .where(eq(submission__submission_.id, submission.id))
-    }
-
+    // Nothing is told about it: the dispatcher looks at the queue itself and hands
+    // this row to the next machine with room for it.
     return submission
   })

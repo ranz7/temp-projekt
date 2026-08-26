@@ -1,0 +1,62 @@
+{
+  "id": "rl-nearest-pairs",
+  "slug": "rl-nearest-pairs",
+  "code": "NP11",
+  "title": "Optimal Neighbour Pairing",
+  "source": {
+    "platform": "runline-labs",
+    "license": "CC0-1.0",
+    "category": "portfolio-demo"
+  },
+  "difficulty": "hard",
+  "rating": 1800,
+  "tags": ["greedy", "sorting", "custom-checker"],
+  "kind": "stdio",
+  "languages": ["python", "cpp"],
+  "limits": {
+    "timeLimitMs": 2000,
+    "memoryLimitMb": 128
+  },
+  "io": {
+    "mode": "stdio",
+    "inputFile": null,
+    "outputFile": null
+  },
+  "statement": {
+    "description": "Pair all 2n items so that the sum of absolute differences inside pairs is as small as possible. Any optimal pairing is accepted.",
+    "input": "The first line contains n. The second line contains 2n distinct integer weights.",
+    "output": "Print n pairs of 1-based item indices. Every index must appear exactly once, and the pairing must have minimum total cost.",
+    "interaction": null,
+    "notes": null
+  },
+  "samples": [
+    {
+      "input": "3\n10 1 8 3 4 20",
+      "output": "2 4\n5 3\n1 6",
+      "explanation": "The pairing has the minimum total cost of 16."
+    }
+  ],
+  "checker": {
+    "type": "custom",
+    "path": "checker/checker.py"
+  },
+  "interactor": null,
+  "modelSolutions": [
+    {
+      "language": "python",
+      "path": "model/sol.py"
+    }
+  ],
+  "tests": {
+    "dir": "tests",
+    "count": 20,
+    "publicCount": 1,
+    "complete": true
+  },
+  "submission": {
+    "type": "source",
+    "allowedExtensions": [".py", ".cpp", ".cc"]
+  },
+  "solvedCount": 0,
+  "executable": true
+}

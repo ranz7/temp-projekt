@@ -1,0 +1,41 @@
+---
+# Capability: ensure-docker-networks
+# Problem: the app, its database, its tunnels and the public proxy should not all
+# sit on one flat network.
+#
+# Four networks, two of them internal - a container on an internal network can
+# reach nothing outside it and nothing outside can reach it:
+#   oj-edge     the proxy and the internet, for visitors and for ACME
+#   oj-ingress  the proxy to the app, internal
+#   oj-db       the app to Postgres, internal
+#   oj-tunnels  the app to the tunnel container, which needs SSH out
+#
+# The docker CLI is used directly: it is already on the machine and needs no
+# extra Ansible collection.
+
+- name: Require the Docker daemon
+  ansible.builtin.command:
+    cmd: docker version --format '{% raw %}{{.Server.Version}}{% endraw %}'
+  register: oj_docker_version
+  changed_when: false
+
+- name: Ensure the deployment's Docker networks
+  ansible.builtin.command:
+    cmd: >-
+      docker network create
+      {% if item.internal | bool %}--internal{% endif %}
+      --label managed-by=online-judge
+      --label online-judge.role={{ item.role }}
+      {{ item.name }}
+  register: oj_network_create
+  changed_when: oj_network_create.rc == 0
+  failed_when: >-
+    oj_network_create.rc != 0
+    and ('already exists' not in oj_network_create.stderr)
+  loop:
+    - {name: "{{ oj_edge_network }}", role: edge, internal: false}
+    - {name: "{{ oj_ingress_network }}", role: ingress, internal: true}
+    - {name: "{{ oj_db_network }}", role: db, internal: true}
+    - {name: "{{ oj_tunnels_network }}", role: tunnels, internal: false}
+  loop_control:
+    label: "{{ item.name }} (internal={{ item.internal }})"

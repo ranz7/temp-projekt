@@ -1,0 +1,49 @@
+# Managed by Ansible capability deploy-checker.
+#
+# The port is published on 127.0.0.1 only. Nothing on this machine faces the
+# internet and no firewall rule is added anywhere: the application machine
+# reaches this port through an SSH tunnel, over the SSH port that already exists.
+name: online-judge-checker
+
+services:
+  checker:
+    image: {{ oj_checker_image }}
+    container_name: {{ oj_checker_container }}
+    restart: unless-stopped
+    env_file:
+      - path: {{ oj_compose_dir }}/checker.env
+        required: true
+    ports:
+      - "127.0.0.1:{{ oj_checker_service_port }}:{{ oj_checker_port }}"
+    # The five grants the sandbox needs, and not one more. deploy/README.md
+    # works out why each is here. In short: SYS_ADMIN so bubblewrap can create
+    # its namespaces and pivot_root, NET_ADMIN so it can raise loopback inside
+    # the network namespace it unshared, seccomp out of the way because the
+    # default profile blocks pivot_root, AppArmor out of the way because on
+    # Ubuntu the default Docker profile refuses the mount changes bubblewrap
+    # makes, and the system paths unmasked because Docker's masking of parts of
+    # /proc stops the sandbox mounting its own. `privileged: true` would work
+    # too and would hand over every capability on the machine, so it is not used.
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+    security_opt:
+      - seccomp=unconfined
+      - apparmor=unconfined
+      - systempaths=unconfined
+    volumes:
+      # This machine's own copy of the problem packages. No test data is baked
+      # into the image and none travels over HTTP.
+      - {{ oj_problems_dir }}:{{ oj_checker_packages_path }}:ro
+      # Scratch is a container volume, so a job's files never touch the disk tree.
+      - {{ oj_checker_scratch_path }}
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:{{ oj_checker_port }}/health', timeout=3)
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 3

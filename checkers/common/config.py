@@ -1,40 +1,52 @@
 """
-Worker configuration, read from the environment only.
+Checker service configuration, read from the environment only.
 
 No host name, port, path or key is written into the source: every value below
 comes from an environment variable documented in `checkers/CONTRACT.md` and in
 `checkers/README.md`.
+
+The bind address defaults to loopback on purpose. The application reaches a
+checker machine through an SSH tunnel, so the service must not be exposed to the
+internet unless somebody deliberately sets `CHECKER_BIND`.
 """
 
 from __future__ import annotations
 
 import os
-import socket
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-DEFAULT_APP_URL = "http://127.0.0.1:3000"
+from .judging import DEFAULT_JUDGE_ENTRY_POINT
+
+PACKAGE_VERSION = "2.0.0"
+
 DEFAULT_PROBLEM_PACKAGES_PATH = "/problems"
-DEFAULT_POLL_SECONDS = 1.0
-DEFAULT_HEARTBEAT_SECONDS = 20.0
 DEFAULT_SCRATCH_PATH = "/tmp/online-judge"
-DEFAULT_HEALTH_PORT = 8080
-DEFAULT_REDIS_URL = "redis://127.0.0.1:6379"
-DEFAULT_REDIS_STREAM = "oj.submissions"
-DEFAULT_REQUEST_TIMEOUT_SECONDS = 15.0
+DEFAULT_BIND = "127.0.0.1"
+DEFAULT_PORT = 8080
+DEFAULT_CAPACITY = 2
+DEFAULT_RESULT_TTL_SECONDS = 900.0
+DEFAULT_SHUTDOWN_GRACE_SECONDS = 30.0
 
 
 class ConfigError(RuntimeError):
-    """A required environment variable is missing or unusable."""
+    """An environment variable is present but unusable."""
 
 
-def _text(name: str, default: str | None = None) -> str:
+def _text(name: str, default: str) -> str:
     raw = os.environ.get(name)
 
     if raw is None or raw.strip() == "":
-        if default is None:
-            raise ConfigError(f"{name} is required and has no default")
         return default
+    return raw.strip()
+
+
+def _optional_text(name: str) -> str | None:
+    raw = os.environ.get(name)
+
+    if raw is None or raw.strip() == "":
+        return None
     return raw.strip()
 
 
@@ -52,6 +64,14 @@ def _number(name: str, default: float) -> float:
     return value
 
 
+def _whole_number(name: str, default: int) -> int:
+    value = _number(name, float(default))
+
+    if value != int(value):
+        raise ConfigError(f"{name} must be a whole number, got {value}")
+    return int(value)
+
+
 def _port(name: str, default: int) -> int:
     raw = os.environ.get(name)
 
@@ -66,69 +86,69 @@ def _port(name: str, default: int) -> int:
     return value
 
 
-def default_worker_id(prefix: str) -> str:
-    """A stable-enough identity when the deployment does not set one."""
-    return f"{prefix}-{socket.gethostname()}"
+def git_revision() -> str | None:
+    """The checkout this service runs from, when it is a checkout at all."""
+    root = Path(__file__).resolve().parents[2]
+
+    try:
+        finished = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    if finished.returncode != 0:
+        return None
+
+    revision = finished.stdout.strip()
+    return revision or None
 
 
 @dataclass(frozen=True)
-class WorkerConfig:
-    """Everything a worker needs to talk to the app and to run one job."""
+class CheckerConfig:
+    """Everything the checker service needs to listen and to judge."""
 
-    app_url: str
-    service_key: str
-    worker_id: str
+    service_key: str | None
     problem_packages_path: Path
-    poll_seconds: float
-    heartbeat_seconds: float
     scratch_path: Path
-    health_port: int
-    redis_url: str
-    redis_stream: str
-    request_timeout_seconds: float
+    bind: str
+    port: int
+    capacity: int
+    result_ttl_seconds: float
+    shutdown_grace_seconds: float
+    judge_entry_point: str
+    version: str
+
+    @property
+    def accepts_calls(self) -> bool:
+        """Without a key the service answers only `/health`."""
+        return self.service_key is not None
 
     @classmethod
-    def from_environment(cls, *, worker_id_prefix: str) -> WorkerConfig:
+    def from_environment(cls) -> CheckerConfig:
+        capacity = _whole_number("CHECKER_CAPACITY", DEFAULT_CAPACITY)
+
         return cls(
-            app_url=_text("APP_URL", DEFAULT_APP_URL).rstrip("/"),
-            service_key=_text("SERVICE_KEY"),
-            worker_id=_text("WORKER_ID", default_worker_id(worker_id_prefix)),
+            service_key=_optional_text("SERVICE_KEY"),
             problem_packages_path=Path(
                 _text("PROBLEM_PACKAGES_PATH", DEFAULT_PROBLEM_PACKAGES_PATH)
             ),
-            poll_seconds=_number("CHECKER_POLL_SECONDS", DEFAULT_POLL_SECONDS),
-            heartbeat_seconds=_number(
-                "CHECKER_HEARTBEAT_SECONDS", DEFAULT_HEARTBEAT_SECONDS
-            ),
             scratch_path=Path(_text("CHECKER_SCRATCH_PATH", DEFAULT_SCRATCH_PATH)),
-            health_port=_port("CHECKER_HEALTH_PORT", DEFAULT_HEALTH_PORT),
-            redis_url=_text("REDIS_URL", DEFAULT_REDIS_URL),
-            redis_stream=_text("REDIS_STREAM", DEFAULT_REDIS_STREAM),
-            request_timeout_seconds=_number(
-                "CHECKER_REQUEST_TIMEOUT_SECONDS", DEFAULT_REQUEST_TIMEOUT_SECONDS
+            bind=_text("CHECKER_BIND", DEFAULT_BIND),
+            port=_port("CHECKER_PORT", DEFAULT_PORT),
+            capacity=capacity,
+            result_ttl_seconds=_number(
+                "CHECKER_RESULT_TTL_SECONDS", DEFAULT_RESULT_TTL_SECONDS
             ),
-        )
-
-
-@dataclass(frozen=True)
-class OioioiConfig:
-    """The extra settings only the C++ worker reads."""
-
-    url: str
-    token: str
-    contest_id: str
-    poll_seconds: float
-    request_timeout_seconds: float
-    poll_timeout_seconds: float
-
-    @classmethod
-    def from_environment(cls) -> OioioiConfig:
-        """Raises ConfigError when OIOIOI is not configured, so the job is released."""
-        return cls(
-            url=_text("OIOIOI_URL").rstrip("/"),
-            token=_text("OIOIOI_TOKEN"),
-            contest_id=_text("OIOIOI_CONTEST_ID"),
-            poll_seconds=_number("OIOIOI_POLL_SECONDS", 2.0),
-            request_timeout_seconds=_number("OIOIOI_REQUEST_TIMEOUT_SECONDS", 10.0),
-            poll_timeout_seconds=_number("OIOIOI_POLL_TIMEOUT_SECONDS", 600.0),
+            shutdown_grace_seconds=_number(
+                "CHECKER_SHUTDOWN_GRACE_SECONDS", DEFAULT_SHUTDOWN_GRACE_SECONDS
+            ),
+            judge_entry_point=_text("CHECKER_JUDGE", DEFAULT_JUDGE_ENTRY_POINT),
+            version=_optional_text("CHECKER_VERSION")
+            or git_revision()
+            or PACKAGE_VERSION,
         )

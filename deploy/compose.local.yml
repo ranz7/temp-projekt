@@ -5,22 +5,23 @@
 # Paths here are relative to the repository root, not to this file: a compose
 # file passed with `-f` resolves against the project directory.
 #
-# What it changes: the worker source and the problem packages come from the
-# working tree instead of the image, so editing a checker or adding a problem
-# package needs a container restart rather than a rebuild.
+# What it changes: the checker service and its judge come from the working tree
+# instead of the image, so editing either needs a container restart rather than
+# a rebuild.
 
 services:
-  checker-bwrap:
+  checker:
     volumes:
       - ./checkers/common:/app/common:ro
       - ./checkers/bwrap:/app/bwrap:ro
-
-  checker-cpp:
-    volumes:
-      - ./checkers/common:/app/common:ro
-      - ./checkers/cpp:/app/cpp:ro
 
   web:
     volumes:
       # Re-seeding picks up a new or edited problem package without a rebuild.
       - ./problems:/app/problems:ro
+      # The panel's batch reads the reference solutions from here at run time.
+      - ./src/backend/modules/benchmark/solutions:/app/solutions:ro
+
+  sweeper:
+    volumes:
+      - ./src/backend/modules/benchmark/solutions:/app/solutions:ro

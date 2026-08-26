@@ -1,5 +1,6 @@
 import { uuidv7 } from '@backend/database/sql-functions'
 import { account__user_ } from '@backend/modules/account/schema'
+import { machine__machine_ } from '@backend/modules/machine/schema'
 import {
   type SubmissionLanguage,
   type TestVisibility,
@@ -67,7 +68,9 @@ export const submission__submission_ = pgTable(
     lease_expires_at_: timestamp({ withTimezone: true, mode: 'date' }),
     judge_claim_id_: uuid(),
     judge_attempts_: integer().notNull().default(0),
-    queue_published_at_: timestamp({ withTimezone: true, mode: 'date' })
+    // Which machine is judging this submission, and what that machine calls the job.
+    machine_id_: uuid(),
+    checker_job_id_: varchar({ length: 64 })
   },
   table => [
     foreignKey({
@@ -80,8 +83,15 @@ export const submission__submission_ = pgTable(
       foreignColumns: [account__user_.id],
       name: 'submission__submission__user__fk_'
     }).onDelete('cascade'),
+    // A machine can be retired without losing the submissions it judged.
+    foreignKey({
+      columns: [table.machine_id_],
+      foreignColumns: [machine__machine_.id],
+      name: 'submission__submission__machine__fk_'
+    }).onDelete('set null'),
     index('submission__submission__problem__idx_').on(table.problem_id_),
     index('submission__submission__user__idx_').on(table.user_id_),
+    index('submission__submission__machine__idx_').on(table.machine_id_),
     index('submission__submission__queued__idx_')
       .on(table.problem_id_, table.created_at_)
       .where(sql`${table.status_} = 'queued'`)
@@ -102,7 +112,10 @@ export const submission__test_result_ = pgTable(
     message_: text(),
     actual_output_: text(),
     time_ms_: integer(),
-    memory_kb_: integer()
+    memory_kb_: integer(),
+    // How many button presses an interactive problem's grader counted. Null for every
+    // ordinary problem, where nothing presses anything.
+    presses_: integer()
   },
   table => [
     foreignKey({

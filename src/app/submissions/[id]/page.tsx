@@ -32,13 +32,13 @@ export default async function SubmissionDetailPage({ params }: SubmissionDetailP
     const submission = await caller.submission.getSubmission({ id })
 
     return (
-      <main className='mx-auto flex w-full max-w-4xl flex-col gap-6 p-6'>
+      <div className='flex flex-col gap-6'>
         <PageHeader
           title={`${submission.problemCode} submission`}
           description={submission.problemTitle}
         />
         <SubmissionDetail submissionId={id} initialSubmission={submission} />
-      </main>
+      </div>
     )
   } catch (error) {
     // A malformed id fails input validation before the handler even runs -
@@ -51,10 +51,10 @@ export default async function SubmissionDetailPage({ params }: SubmissionDetailP
         : 'We could not find that submission.'
 
     return (
-      <main className='mx-auto flex w-full max-w-4xl flex-col gap-6 p-6'>
+      <div className='flex flex-col gap-6'>
         <PageHeader title='Submission' />
         <ErrorState title="Can't open this submission" description={message} />
-      </main>
+      </div>
     )
   }
 }

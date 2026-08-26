@@ -1,0 +1,40 @@
+# Managed by Ansible capability deploy-app-proxy.
+#
+# The only container on this machine that publishes anything. Two networks:
+# `oj-edge` for visitors and for Let's Encrypt, `oj-ingress` - internal - to
+# reach the app, which publishes nothing itself.
+name: online-judge-proxy
+
+services:
+  proxy:
+    image: {{ oj_caddy_image }}
+    container_name: {{ oj_proxy_container }}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+{% if oj_domain | length > 0 %}
+      - "443:443"
+      - "443:443/udp"
+{% endif %}
+    volumes:
+      - {{ oj_ops_root }}/proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # The certificate and its account key outlive every container.
+      - {{ oj_data_dir }}/caddy:/data
+      - {{ oj_data_dir }}/caddy-config:/config
+    networks:
+      - edge
+      - ingress
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+
+networks:
+  edge:
+    external: true
+    name: {{ oj_edge_network }}
+  ingress:
+    external: true
+    name: {{ oj_ingress_network }}

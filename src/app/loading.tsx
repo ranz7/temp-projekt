@@ -1,33 +1,47 @@
-import { PageHeader } from './_components/page-header'
-import { ProblemTableSkeleton } from './_components/problems/problem-table-skeleton'
+import { Card } from './_components/card'
 import { Skeleton } from './_components/skeleton'
 
-const ACTIVITY_SKELETON_KEYS = ['activity-1', 'activity-2', 'activity-3', 'activity-4']
+const SUBMISSION_KEYS = ['s1', 's2', 's3', 's4', 's5', 's6']
+const PROBLEM_KEYS = ['p1', 'p2', 'p3', 'p4']
 
 export default function HomeLoading() {
   return (
-    <main className='mx-auto flex w-full max-w-5xl flex-col gap-6 p-6'>
-      <PageHeader
-        title='Problems'
-        description='Browse problems and see what the community is solving.'
-      />
-      <div className='flex flex-col gap-6 lg:flex-row lg:items-start'>
-        <div className='flex min-w-0 flex-1 flex-col gap-4'>
-          <ProblemTableSkeleton />
-        </div>
-        <div className='flex w-full flex-col gap-3 rounded-xl border border-border bg-card p-4 lg:w-80 lg:shrink-0'>
-          <Skeleton className='h-5 w-32' />
-          {ACTIVITY_SKELETON_KEYS.map(key => (
-            <div
-              key={key}
-              className='flex flex-col gap-1.5 border-border border-b pb-3 last:border-0 last:pb-0'
-            >
-              <Skeleton className='h-4 w-full' />
-              <Skeleton className='h-3 w-2/3' />
+    <div className='space-y-8'>
+      <header className='space-y-1'>
+        <h1 className='font-bold text-2xl text-foreground tracking-tight sm:text-3xl'>Dashboard</h1>
+        <p className='max-w-2xl text-muted text-sm sm:text-base'>
+          Browse proposed problems and watch the latest submissions as they move through the judge
+          queue.
+        </p>
+      </header>
+
+      <div className='grid gap-6 lg:grid-cols-5'>
+        <div className='min-w-0 lg:col-span-3'>
+          <Card title='Latest submissions' subtitle='Recent judge queue activity'>
+            <div className='divide-y divide-divider'>
+              {SUBMISSION_KEYS.map(key => (
+                <div key={key} className='flex items-center gap-4 px-4 py-3 sm:px-5'>
+                  <Skeleton className='h-4 w-36' />
+                  <Skeleton className='h-4 flex-1' />
+                  <Skeleton className='h-5 w-20 rounded-full' />
+                </div>
+              ))}
             </div>
-          ))}
+          </Card>
+        </div>
+        <div className='min-w-0 lg:col-span-2'>
+          <Card title='Proposed problems' subtitle='Tasks to try'>
+            <div className='divide-y divide-divider'>
+              {PROBLEM_KEYS.map(key => (
+                <div key={key} className='flex flex-col gap-2 px-4 py-3 sm:px-5'>
+                  <Skeleton className='h-4 w-2/3' />
+                  <Skeleton className='h-3 w-1/3' />
+                </div>
+              ))}
+            </div>
+          </Card>
         </div>
       </div>
-    </main>
+    </div>
   )
 }

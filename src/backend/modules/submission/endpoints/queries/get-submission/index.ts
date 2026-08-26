@@ -17,6 +17,7 @@ type TestRow = {
   pointsAwarded: number
   timeMs: number | null
   memoryKb: number | null
+  presses: number | null
   message: string | null
   actualOutput: string | null
   input: string | null
@@ -33,7 +34,10 @@ function toTestEntry(row: TestRow): SubmissionTestDTO {
     passed: row.passed,
     pointsAwarded: row.pointsAwarded,
     timeMs: row.timeMs,
-    memoryKb: row.memoryKb
+    memoryKb: row.memoryKb,
+    // Says what the person's own solution did, not what the test holds, so it is safe
+    // on a hidden test as well.
+    presses: row.presses
   }
 
   if (row.visibility === 'public') {
@@ -104,6 +108,7 @@ export const getSubmissionProcedure = publicProcedure
         pointsAwarded: submission__test_result_.points_awarded_,
         timeMs: submission__test_result_.time_ms_,
         memoryKb: submission__test_result_.memory_kb_,
+        presses: submission__test_result_.presses_,
         message: submission__test_result_.message_,
         actualOutput: submission__test_result_.actual_output_,
         input: task__problem_test_.input_,

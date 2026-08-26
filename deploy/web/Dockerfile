@@ -1,8 +1,9 @@
-# The Next.js app: UI, tRPC API and the internal checker endpoints.
+# The Next.js app: the site, the tRPC API and the admin panel. The same image
+# also runs the loop runner, which syncs the machine registry, hands waiting
+# submissions to checkers and collects what they answer.
 #
-# Bun installs and bundles; Node builds and runs. Nothing about the checkers,
-# OIOIOI or any contest data beyond the problem packages already in this
-# repository ends up in the image.
+# Bun installs and bundles; Node builds and runs. No checker code and no contest
+# data beyond the problem packages already in this repository ends up here.
 
 FROM oven/bun:1.2.23-alpine AS bun
 
@@ -33,7 +34,7 @@ ENV DATABASE_URL=${DATABASE_URL}
 RUN ./node_modules/.bin/next build
 
 # The runtime carries no TypeScript toolchain, so the three operational scripts
-# are bundled here into plain Node files: migrate, seed and the queue sweeper.
+# are bundled here into plain Node files: migrate, seed and the loop runner.
 RUN bun build src/backend/database/scripts/db-migrate.ts --target=node --outfile=ops/migrate.mjs \
  && bun build src/backend/database/seed.ts --target=node --outfile=ops/seed.mjs \
  && bun build src/backend/modules/submission/scripts/run-sweeper.ts --target=node --outfile=ops/sweeper.mjs
@@ -58,7 +59,15 @@ COPY --from=builder --chown=nextjs:nodejs /app/ops ./ops
 COPY --from=builder --chown=nextjs:nodejs /app/src/backend/database/migrations ./src/backend/database/migrations
 # Problem packages ship with the repository; seeding reads them at first start.
 COPY --from=builder --chown=nextjs:nodejs /app/problems ./problems
+# The reference solutions the panel's batch sends. Read as data at run time, by
+# the app and by the loop runner, from BENCHMARK_SOLUTIONS_PATH.
+COPY --from=builder --chown=nextjs:nodejs /app/src/backend/modules/benchmark/solutions ./solutions
 COPY --chown=nextjs:nodejs deploy/web/entrypoint.sh ./entrypoint.sh
+
+# Where those two directories ended up in this image. A deployment overrides
+# neither; both are properties of the image.
+ENV PROBLEM_PACKAGES_PATH=/app/problems
+ENV BENCHMARK_SOLUTIONS_PATH=/app/solutions
 
 USER nextjs
 
