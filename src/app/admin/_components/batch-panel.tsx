@@ -25,9 +25,6 @@ type BatchPanelProps = {
   problems: ProblemOption[]
 }
 
-const CONTROL_CLASS =
-  'rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-accent'
-
 /**
  * Sends a batch of shipped solutions against a problem, and shows the running batch's
  * verdicts as they land. Only one batch runs at a time - the form gives way to the live
@@ -66,23 +63,19 @@ export function BatchPanel({ batch, problems }: BatchPanelProps) {
 
   if (isRunning && batch !== null) {
     return (
-      <Card>
-        <div className='flex flex-wrap items-center justify-between gap-3'>
-          <div className='flex flex-col gap-0.5'>
-            <h2 className='font-semibold text-sm'>Batch running</h2>
-            <p className='text-muted text-sm'>
-              {batch.problemTitle} - {formatLanguageLabel(batch.language)}
-            </p>
-          </div>
-          <button
-            type='button'
-            onClick={() => stopBatchMutation.mutate({})}
-            disabled={stopBatchMutation.isPending}
-            className='rounded-lg border border-danger px-3 py-1.5 font-medium text-danger text-sm disabled:opacity-60'
-          >
-            {stopBatchMutation.isPending ? 'Stopping…' : 'Stop batch'}
-          </button>
-        </div>
+      <Card
+        title='Batch running'
+        subtitle={`${batch.problemTitle} - ${formatLanguageLabel(batch.language)}`}
+        bodyClassName='flex flex-col gap-4 p-4 sm:p-5'
+      >
+        <button
+          type='button'
+          onClick={() => stopBatchMutation.mutate({})}
+          disabled={stopBatchMutation.isPending}
+          className='btn-secondary self-start border-danger text-danger'
+        >
+          {stopBatchMutation.isPending ? 'Stopping...' : 'Stop batch'}
+        </button>
 
         <div className='flex flex-wrap gap-6 text-sm'>
           <span className='tabular-nums'>
@@ -111,17 +104,13 @@ export function BatchPanel({ batch, problems }: BatchPanelProps) {
   }
 
   return (
-    <Card>
-      <div className='flex flex-col gap-0.5'>
-        <h2 className='font-semibold text-sm'>Send a batch</h2>
-        <p className='text-muted text-sm'>
-          Sends a mixture of correct and deliberately wrong solutions, about seven in ten correct,
-          as the built-in <code>benchmark</code> account.
-        </p>
-      </div>
-
+    <Card
+      title='Send a batch'
+      subtitle='A mixture of correct and deliberately wrong solutions, about seven in ten correct, sent as the built-in benchmark account.'
+      bodyClassName='flex flex-col gap-4 p-4 sm:p-5'
+    >
       {batch !== null && batch.status !== 'running' ? (
-        <div className='flex flex-col gap-2 rounded-lg border border-border p-3'>
+        <div className='rounded-lg border border-border p-3 flex flex-col gap-2'>
           <p className='text-muted text-xs uppercase tracking-wide'>
             Last batch - {batch.problemTitle} ({batch.status})
           </p>
@@ -134,12 +123,12 @@ export function BatchPanel({ batch, problems }: BatchPanelProps) {
         <p className='text-muted text-sm'>No problems are available to send a batch against.</p>
       ) : (
         <div className='flex flex-wrap items-end gap-3'>
-          <label className='flex min-w-48 flex-col gap-1.5'>
-            <span className='font-medium text-muted text-xs'>Problem</span>
+          <label className='flex min-w-48 flex-col gap-1 font-medium text-muted text-xs'>
+            Problem
             <select
               value={problemSlug}
               onChange={event => setProblemSlug(event.target.value)}
-              className={CONTROL_CLASS}
+              className='field'
             >
               {problems.map(problem => (
                 <option key={problem.slug} value={problem.slug}>
@@ -149,15 +138,15 @@ export function BatchPanel({ batch, problems }: BatchPanelProps) {
             </select>
           </label>
 
-          <label className='flex flex-col gap-1.5'>
-            <span className='font-medium text-muted text-xs'>Submissions</span>
+          <label className='flex flex-col gap-1 font-medium text-muted text-xs'>
+            Submissions
             <input
               type='number'
               min={1}
               max={BATCH_MAX_SUBMISSIONS}
               value={count}
               onChange={event => setCount(Number(event.target.value))}
-              className={`${CONTROL_CLASS} w-28`}
+              className='field w-28'
             />
           </label>
 
@@ -170,9 +159,9 @@ export function BatchPanel({ batch, problems }: BatchPanelProps) {
               count < 1 ||
               count > BATCH_MAX_SUBMISSIONS
             }
-            className='rounded-lg bg-accent px-4 py-2 font-medium text-accent-foreground text-sm disabled:opacity-60'
+            className='btn-primary'
           >
-            {startBatchMutation.isPending ? 'Starting…' : 'Start batch'}
+            {startBatchMutation.isPending ? 'Starting...' : 'Start batch'}
           </button>
         </div>
       )}

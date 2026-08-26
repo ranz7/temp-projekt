@@ -22,10 +22,7 @@ export function HeaderAuth({ username }: { username: string | null }) {
 
   if (username === null) {
     return (
-      <Link
-        href='/login'
-        className='rounded-lg bg-accent px-3 py-2 font-medium text-accent-foreground text-sm'
-      >
+      <Link href='/login' className='btn-primary'>
         Sign in
       </Link>
     )
@@ -38,7 +35,7 @@ export function HeaderAuth({ username }: { username: string | null }) {
         type='button'
         onClick={() => logOutMutation.mutate(undefined)}
         disabled={logOutMutation.isPending}
-        className='rounded-lg border border-border px-3 py-2 font-medium hover:bg-placeholder disabled:opacity-60'
+        className='btn-secondary'
       >
         Sign out
       </button>

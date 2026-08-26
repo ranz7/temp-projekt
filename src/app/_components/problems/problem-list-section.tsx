@@ -5,7 +5,6 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { cn } from '@/app/_components/cn'
-import { EmptyState } from '@/app/_components/empty-state'
 import { ErrorState } from '@/app/_components/error-state'
 import { useTRPC } from '@/app/_trpc/config'
 import { buildProblemListSearchParams, parseProblemListParams } from './list-params'
@@ -82,8 +81,13 @@ export function ProblemListSection() {
     params.tag !== undefined ||
     params.kind !== undefined
 
+  const list = listQuery.data
+  const from = list === undefined || list.total === 0 ? 0 : (list.page - 1) * list.pageSize + 1
+  const to = list === undefined ? 0 : Math.min(list.page * list.pageSize, list.total)
+  const totalPages = list === undefined ? 1 : Math.max(1, Math.ceil(list.total / list.pageSize))
+
   return (
-    <div className='flex flex-col gap-4'>
+    <div className='card'>
       <ProblemFilters
         params={params}
         tags={facets.tags}
@@ -93,29 +97,47 @@ export function ProblemListSection() {
         onClear={clearFilters}
       />
 
+      <div className='flex flex-wrap items-center justify-between gap-2 border-divider border-b px-4 py-2 text-muted text-xs sm:px-5'>
+        <span className={cn(listQuery.isFetching && 'opacity-60')}>
+          Showing{' '}
+          <span className='font-medium text-foreground tabular-nums'>
+            {from}-{to}
+          </span>{' '}
+          of <span className='font-medium text-foreground tabular-nums'>{list?.total ?? 0}</span>{' '}
+          matches
+          {listQuery.isFetching ? ' - updating...' : null}
+        </span>
+        <span>
+          Page{' '}
+          <span className='text-foreground tabular-nums'>
+            {list?.page ?? 1}/{totalPages}
+          </span>
+        </span>
+      </div>
+
       {listQuery.isError ? (
         <ErrorState description='Could not load problems. Try reloading the page.' />
-      ) : listQuery.data === undefined ? (
+      ) : list === undefined ? (
         <ProblemTableSkeleton />
-      ) : listQuery.data.problems.length === 0 ? (
-        <EmptyState
-          title='No problems match these filters.'
-          description={
-            hasActiveFilters ? 'Try a different search or clear the filters.' : undefined
-          }
-        />
+      ) : list.problems.length === 0 ? (
+        <p className='px-4 py-6 text-muted text-sm sm:px-5'>
+          {hasActiveFilters
+            ? 'No problems match these filters. Try a different search or reset them.'
+            : 'No problems yet.'}
+        </p>
       ) : (
         <div className={cn(listQuery.isFetching && 'opacity-60 transition-opacity')}>
-          <ProblemTable problems={listQuery.data.problems} />
+          <ProblemTable problems={list.problems} />
         </div>
       )}
 
-      {listQuery.data !== undefined && listQuery.data.problems.length > 0 ? (
+      {list !== undefined ? (
         <ProblemPagination
-          page={listQuery.data.page}
-          pageSize={listQuery.data.pageSize}
-          total={listQuery.data.total}
+          page={list.page}
+          pageSize={list.pageSize}
+          total={list.total}
           onPageChange={setPage}
+          disabled={listQuery.isFetching}
         />
       ) : null}
     </div>

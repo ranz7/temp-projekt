@@ -10,12 +10,10 @@ type PublicTestRowProps = {
 /** A sample test: everything a person can already see on the problem page is safe to repeat here in full. */
 export function PublicTestRow({ test }: PublicTestRowProps) {
   return (
-    <div className='flex flex-col gap-3 rounded-xl border border-border bg-card p-4'>
+    <div className='card flex flex-col gap-3 p-4'>
       <div className='flex flex-wrap items-center justify-between gap-2'>
         <p className='font-medium text-sm'>Sample test {test.ordinal}</p>
-        <span
-          className={`rounded-full px-2.5 py-1 font-medium text-xs ${testVerdictAccentClass(test.verdict)}`}
-        >
+        <span className={`badge ${testVerdictAccentClass(test.verdict)}`}>
           {TEST_VERDICT_LABELS[test.verdict]}
         </span>
       </div>

@@ -26,49 +26,51 @@ export function MachineTable({ machines }: MachineTableProps) {
   }
 
   return (
-    <DataTable>
-      <thead>
-        <tr className='border-border border-b text-left text-muted text-xs uppercase tracking-wide'>
-          <th className='px-3 py-2 font-medium'>Machine</th>
-          <th className='px-3 py-2 font-medium'>State</th>
-          <th className='px-3 py-2 font-medium'>Judging now</th>
-          <th className='px-3 py-2 font-medium'>Judged total</th>
-          <th className='px-3 py-2 font-medium'>Last seen</th>
-          <th className='px-3 py-2 font-medium'>
-            <span className='sr-only'>Enable or disable</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {machines.map(machine => {
-          const state = machineState(machine)
+    <div className='card'>
+      <DataTable>
+        <thead>
+          <tr>
+            <th className='th'>Machine</th>
+            <th className='th'>State</th>
+            <th className='th'>Judging now</th>
+            <th className='th'>Judged total</th>
+            <th className='th'>Last seen</th>
+            <th className='th'>
+              <span className='sr-only'>Enable or disable</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody className='divide-y divide-divider'>
+          {machines.map(machine => {
+            const state = machineState(machine)
 
-          return (
-            <tr key={machine.id} className='border-border border-b align-top last:border-b-0'>
-              <td className='px-3 py-2'>
-                <div className='flex flex-col gap-0.5'>
-                  <span className='font-medium'>{machine.name}</span>
-                  <span className='text-muted text-xs'>{machine.address}</span>
-                </div>
-              </td>
-              <td className='px-3 py-2'>
-                <div className='flex flex-col gap-0.5'>
-                  <MachineStateBadge state={state} />
-                  {state === 'unreachable' && machine.lastError !== null ? (
-                    <span className='text-status-red text-xs'>{machine.lastError}</span>
-                  ) : null}
-                </div>
-              </td>
-              <td className='px-3 py-2 tabular-nums'>{formatCount(machine.judgingNow)}</td>
-              <td className='px-3 py-2 tabular-nums'>{formatCount(machine.judgedTotal)}</td>
-              <td className='px-3 py-2 text-muted'>{formatRelativeToNow(machine.lastSeenAt)}</td>
-              <td className='px-3 py-2'>
-                <MachineToggle machineId={machine.id} enabled={machine.enabled} />
-              </td>
-            </tr>
-          )
-        })}
-      </tbody>
-    </DataTable>
+            return (
+              <tr key={machine.id} className='tr align-top'>
+                <td className='td'>
+                  <div className='flex flex-col gap-0.5'>
+                    <span className='font-medium'>{machine.name}</span>
+                    <span className='text-muted text-xs'>{machine.address}</span>
+                  </div>
+                </td>
+                <td className='td'>
+                  <div className='flex flex-col gap-0.5'>
+                    <MachineStateBadge state={state} />
+                    {state === 'unreachable' && machine.lastError !== null ? (
+                      <span className='text-status-red text-xs'>{machine.lastError}</span>
+                    ) : null}
+                  </div>
+                </td>
+                <td className='td tabular-nums'>{formatCount(machine.judgingNow)}</td>
+                <td className='td tabular-nums'>{formatCount(machine.judgedTotal)}</td>
+                <td className='td text-muted'>{formatRelativeToNow(machine.lastSeenAt)}</td>
+                <td className='td'>
+                  <MachineToggle machineId={machine.id} enabled={machine.enabled} />
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </DataTable>
+    </div>
   )
 }

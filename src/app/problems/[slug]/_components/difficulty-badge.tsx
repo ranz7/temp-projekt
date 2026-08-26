@@ -8,20 +8,15 @@ const DIFFICULTY_LABELS: Record<ProblemDifficulty, string> = {
 }
 
 const DIFFICULTY_CLASSES: Record<ProblemDifficulty, string> = {
-  easy: 'bg-status-green/15 text-status-green',
-  medium: 'bg-status-amber/15 text-status-amber',
-  hard: 'bg-status-red/15 text-status-red'
+  easy: 'bg-tint-green text-tint-green-ink ring-tint-green-ring',
+  medium: 'bg-tint-amber text-tint-amber-ink ring-tint-amber-ring',
+  hard: 'bg-tint-red text-tint-red-ink ring-tint-red-ring'
 }
 
 /** Colour-coded difficulty pill, keyed to the same accent palette as submission statuses. */
 export function DifficultyBadge({ difficulty }: { difficulty: ProblemDifficulty }) {
   return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded-full px-2.5 py-1 font-medium text-xs',
-        DIFFICULTY_CLASSES[difficulty]
-      )}
-    >
+    <span className={cn('badge', DIFFICULTY_CLASSES[difficulty])}>
       {DIFFICULTY_LABELS[difficulty]}
     </span>
   )

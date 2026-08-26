@@ -62,8 +62,8 @@ export function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
-      <div className='flex flex-col gap-1.5'>
-        <label htmlFor='username' className='font-medium text-sm'>
+      <div className='flex flex-col gap-1'>
+        <label htmlFor='username' className='font-medium text-muted text-xs'>
           Username
         </label>
         <input
@@ -76,7 +76,7 @@ export function LoginForm() {
           pattern={USERNAME_PATTERN}
           value={username}
           onChange={event => setUsername(event.target.value)}
-          className='rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-accent'
+          className='field'
           placeholder='letters, digits, _ - .'
         />
       </div>
@@ -88,9 +88,9 @@ export function LoginForm() {
       <button
         type='submit'
         disabled={logInMutation.isPending || username.length === 0}
-        className='rounded-lg bg-accent px-3 py-2 font-medium text-accent-foreground text-sm disabled:opacity-60'
+        className='btn-primary self-start'
       >
-        {logInMutation.isPending ? 'Signing in…' : 'Sign in'}
+        {logInMutation.isPending ? 'Signing in...' : 'Sign in'}
       </button>
     </form>
   )

@@ -17,10 +17,7 @@ export function MySubmissionsTable({ submissions }: MySubmissionsTableProps) {
         title='No submissions yet'
         description='Solve a problem and submit a solution to see it here.'
         action={
-          <Link
-            href='/problems'
-            className='rounded-lg bg-accent px-3 py-2 font-medium text-accent-foreground text-sm'
-          >
+          <Link href='/problems' className='btn-primary'>
             Browse problems
           </Link>
         }
@@ -29,46 +26,51 @@ export function MySubmissionsTable({ submissions }: MySubmissionsTableProps) {
   }
 
   return (
-    <DataTable>
-      <thead>
-        <tr className='border-border border-b text-left text-muted text-xs uppercase tracking-wide'>
-          <th className='px-3 py-2 font-medium'>When</th>
-          <th className='px-3 py-2 font-medium'>Problem</th>
-          <th className='px-3 py-2 font-medium'>Language</th>
-          <th className='px-3 py-2 font-medium'>Status</th>
-          <th className='px-3 py-2 font-medium'>Score</th>
-          <th className='px-3 py-2 font-medium'>
-            <span className='sr-only'>Open</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {submissions.map(submission => (
-          <tr key={submission.id} className='border-border border-b last:border-b-0'>
-            <td className='whitespace-nowrap px-3 py-2'>{formatDateTime(submission.createdAt)}</td>
-            <td className='px-3 py-2'>
-              <Link
-                href={`/problems/${submission.problemSlug}`}
-                className='text-accent hover:underline'
-              >
-                {submission.problemCode} - {submission.problemTitle}
-              </Link>
-            </td>
-            <td className='px-3 py-2'>{formatLanguageLabel(submission.language)}</td>
-            <td className='px-3 py-2'>
-              <StatusBadge status={submission.status} />
-            </td>
-            <td className='whitespace-nowrap px-3 py-2'>
-              {formatScore(submission.score, submission.maxScore)}
-            </td>
-            <td className='px-3 py-2'>
-              <Link href={`/submissions/${submission.id}`} className='text-accent hover:underline'>
-                View
-              </Link>
-            </td>
+    <div className='card'>
+      <DataTable>
+        <thead>
+          <tr>
+            <th className='th'>When</th>
+            <th className='th'>Problem</th>
+            <th className='th'>Language</th>
+            <th className='th'>Status</th>
+            <th className='th'>Score</th>
+            <th className='th'>
+              <span className='sr-only'>Open</span>
+            </th>
           </tr>
-        ))}
-      </tbody>
-    </DataTable>
+        </thead>
+        <tbody className='divide-y divide-divider'>
+          {submissions.map(submission => (
+            <tr key={submission.id} className='tr'>
+              <td className='td whitespace-nowrap'>{formatDateTime(submission.createdAt)}</td>
+              <td className='td'>
+                <Link
+                  href={`/problems/${submission.problemSlug}`}
+                  className='text-accent hover:underline'
+                >
+                  {submission.problemCode} - {submission.problemTitle}
+                </Link>
+              </td>
+              <td className='td'>{formatLanguageLabel(submission.language)}</td>
+              <td className='td'>
+                <StatusBadge status={submission.status} />
+              </td>
+              <td className='td whitespace-nowrap'>
+                {formatScore(submission.score, submission.maxScore)}
+              </td>
+              <td className='td'>
+                <Link
+                  href={`/submissions/${submission.id}`}
+                  className='text-accent hover:underline'
+                >
+                  View
+                </Link>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </DataTable>
+    </div>
   )
 }

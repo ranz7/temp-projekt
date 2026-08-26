@@ -2,7 +2,6 @@
 
 import type { SubmissionLanguage } from '@backend/modules/task/schema'
 import { type ChangeEvent, type DragEvent, type ReactNode, useRef, useState } from 'react'
-import { cn } from '@/app/_components/cn'
 import { languageForFileName } from './language'
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024
@@ -29,11 +28,15 @@ function readFileAsText(file: File): Promise<string> {
 }
 
 /**
- * Wraps the editor so a file can be dropped onto it or picked from disk,
- * replacing the editor's content. Files over 2 MB are refused with a
- * readable message instead of being loaded.
+ * A solution taken from a file, either dropped onto the editor or picked from
+ * disk. Files over 2 MB are refused with a readable message instead of being
+ * loaded. Returns the wrapper to put around the editor, and the button that
+ * opens the file picker - the caller decides where that button sits.
  */
-export function EditorDropZone({ children, onFileLoaded, onFileRejected }: EditorDropZoneProps) {
+export function useSolutionFile({
+  onFileLoaded,
+  onFileRejected
+}: Omit<EditorDropZoneProps, 'children'>) {
   const [isDraggingOver, setIsDraggingOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -72,33 +75,21 @@ export function EditorDropZone({ children, onFileLoaded, onFileRejected }: Edito
     }
   }
 
-  return (
-    <div className='flex flex-col gap-2'>
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: drag-and-drop is mouse-only by nature; the "Choose file" button below is the keyboard-reachable equivalent */}
-      <div
-        onDragOver={event => {
-          event.preventDefault()
-          setIsDraggingOver(true)
-        }}
-        onDragLeave={() => setIsDraggingOver(false)}
-        onDrop={handleDrop}
-        className={cn(
-          'rounded-lg outline-2 outline-dashed outline-transparent transition-colors',
-          isDraggingOver && 'outline-accent'
-        )}
-      >
-        {children}
-      </div>
-      <div className='flex items-center gap-2'>
-        <button
-          type='button'
-          onClick={() => fileInputRef.current?.click()}
-          className='self-start rounded-lg border border-border px-3 py-1.5 font-medium text-xs hover:bg-placeholder'
-        >
-          Choose file
-        </button>
-        <p className='text-muted text-xs'>or drop a file onto the editor - up to 2 MB</p>
-      </div>
+  return {
+    isDraggingOver,
+    /** Spread onto the element wrapping the editor. */
+    dropZoneProps: {
+      onDragOver: (event: DragEvent<HTMLDivElement>) => {
+        event.preventDefault()
+        setIsDraggingOver(true)
+      },
+      onDragLeave: () => setIsDraggingOver(false),
+      onDrop: handleDrop
+    },
+    /** Opens the file picker - wire it to a button of the caller's own. */
+    openFilePicker: () => fileInputRef.current?.click(),
+    /** Render once, anywhere: the hidden input the picker opens. */
+    fileInput: (
       <input
         ref={fileInputRef}
         type='file'
@@ -106,6 +97,6 @@ export function EditorDropZone({ children, onFileLoaded, onFileRejected }: Edito
         onChange={handleFileInputChange}
         aria-label='Choose a solution file'
       />
-    </div>
-  )
+    )
+  }
 }

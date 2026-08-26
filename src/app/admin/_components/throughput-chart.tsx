@@ -21,7 +21,7 @@ export function ThroughputChart({ throughput }: ThroughputChartProps) {
   const gap = barWidth * BAR_GAP_RATIO
 
   return (
-    <Card className='gap-3 p-4'>
+    <Card className='flex flex-col gap-3 p-4'>
       <span className='text-muted text-xs uppercase tracking-wide'>Throughput</span>
       <div className='flex flex-wrap items-end justify-between gap-4'>
         <div className='flex flex-col gap-1'>

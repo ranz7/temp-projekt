@@ -23,7 +23,7 @@ export default async function SubmissionsPage({ searchParams }: SubmissionsPageP
   )
 
   return (
-    <main className='mx-auto flex w-full max-w-5xl flex-col gap-6 p-6'>
+    <div className='flex flex-col gap-6'>
       <PageHeader title='Submissions' description='The newest activity from everyone.' />
       <SubmissionsTable submissions={data.submissions} currentUsername={user?.username ?? null} />
       {data.total > data.pageSize ? (
@@ -34,6 +34,6 @@ export default async function SubmissionsPage({ searchParams }: SubmissionsPageP
           basePath='/submissions'
         />
       ) : null}
-    </main>
+    </div>
   )
 }

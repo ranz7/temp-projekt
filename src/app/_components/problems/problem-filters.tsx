@@ -36,8 +36,7 @@ type ProblemFiltersProps = {
   onClear: () => void
 }
 
-const CONTROL_CLASS =
-  'rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-accent'
+const LABEL_CLASS = 'flex flex-col gap-1 font-medium text-muted text-xs'
 
 /** Search, filters, sort, order and page size for the problem list - all Postgres-backed. */
 export function ProblemFilters({
@@ -72,25 +71,25 @@ export function ProblemFilters({
   }, [searchDraft])
 
   return (
-    <div className='flex flex-col gap-3 rounded-xl border border-border bg-card p-4'>
-      <div className='flex flex-wrap gap-3'>
-        <label className='flex min-w-48 flex-1 flex-col gap-1.5'>
-          <span className='font-medium text-muted text-xs'>Search</span>
+    <div className='flex flex-col gap-3 border-divider border-b p-4 sm:px-5'>
+      <div className='flex flex-col gap-3 lg:flex-row lg:items-end'>
+        <label className={`${LABEL_CLASS} min-w-0 flex-1`}>
+          Search code / title
           <input
             type='text'
             value={searchDraft}
             onChange={event => setSearchDraft(event.target.value)}
-            placeholder='Search by code or title'
-            className={CONTROL_CLASS}
+            placeholder='e.g. 4A or Watermelon'
+            className='field'
           />
         </label>
 
-        <label className='flex flex-col gap-1.5'>
-          <span className='font-medium text-muted text-xs'>Difficulty</span>
+        <label className={LABEL_CLASS}>
+          Difficulty
           <select
             value={params.difficulty ?? ''}
             onChange={event => onChange({ difficulty: parseDifficulty(event.target.value) })}
-            className={CONTROL_CLASS}
+            className='field'
           >
             <option value=''>All</option>
             {PROBLEM_DIFFICULTIES.map(difficulty => (
@@ -101,14 +100,14 @@ export function ProblemFilters({
           </select>
         </label>
 
-        <label className='flex flex-col gap-1.5'>
-          <span className='font-medium text-muted text-xs'>Tag</span>
+        <label className={LABEL_CLASS}>
+          Tag
           <select
             value={params.tag ?? ''}
             onChange={event =>
               onChange({ tag: event.target.value === '' ? undefined : event.target.value })
             }
-            className={CONTROL_CLASS}
+            className='field'
           >
             <option value=''>All</option>
             {tags.map(tag => (
@@ -119,14 +118,14 @@ export function ProblemFilters({
           </select>
         </label>
 
-        <label className='flex flex-col gap-1.5'>
-          <span className='font-medium text-muted text-xs'>Kind</span>
+        <label className={LABEL_CLASS}>
+          Kind
           <select
             value={params.kind ?? ''}
             onChange={event =>
               onChange({ kind: event.target.value === '' ? undefined : event.target.value })
             }
-            className={CONTROL_CLASS}
+            className='field'
           >
             <option value=''>All</option>
             {kinds.map(kind => (
@@ -138,13 +137,13 @@ export function ProblemFilters({
         </label>
       </div>
 
-      <div className='flex flex-wrap items-end gap-3'>
-        <label className='flex flex-col gap-1.5'>
-          <span className='font-medium text-muted text-xs'>Sort by</span>
+      <div className='flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end'>
+        <label className={LABEL_CLASS}>
+          Sort by
           <select
             value={params.sort}
             onChange={event => onChange({ sort: parseSort(event.target.value) })}
-            className={CONTROL_CLASS}
+            className='field'
           >
             {PROBLEM_SORT_FIELDS.map(field => (
               <option key={field} value={field}>
@@ -154,24 +153,24 @@ export function ProblemFilters({
           </select>
         </label>
 
-        <label className='flex flex-col gap-1.5'>
-          <span className='font-medium text-muted text-xs'>Order</span>
+        <label className={LABEL_CLASS}>
+          Order
           <select
             value={params.order}
             onChange={event => onChange({ order: event.target.value === 'desc' ? 'desc' : 'asc' })}
-            className={CONTROL_CLASS}
+            className='field'
           >
             <option value='asc'>Ascending</option>
             <option value='desc'>Descending</option>
           </select>
         </label>
 
-        <label className='flex flex-col gap-1.5'>
-          <span className='font-medium text-muted text-xs'>Per page</span>
+        <label className={LABEL_CLASS}>
+          Page size
           <select
             value={params.pageSize}
             onChange={event => onChange({ pageSize: parsePageSize(event.target.value) })}
-            className={CONTROL_CLASS}
+            className='field'
           >
             {PROBLEM_PAGE_SIZES.map(size => (
               <option key={size} value={size}>
@@ -182,8 +181,8 @@ export function ProblemFilters({
         </label>
 
         {hasActiveFilters ? (
-          <button type='button' onClick={onClear} className='text-accent text-sm hover:underline'>
-            Clear filters
+          <button type='button' onClick={onClear} className='btn-secondary mt-auto'>
+            Reset filters
           </button>
         ) : null}
       </div>

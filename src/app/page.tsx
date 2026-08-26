@@ -1,45 +1,31 @@
-import { dehydrate, HydrationBoundary } from '@tanstack/react-query'
-import { PageHeader } from './_components/page-header'
-import { ActivityPanel } from './_components/problems/activity-panel'
-import type { RawSearchParams } from './_components/problems/list-params'
-import { parseProblemListParams } from './_components/problems/list-params'
-import { ProblemListSection } from './_components/problems/problem-list-section'
-import { getQueryClient, prefetchAwaited, trpc } from './_trpc/rsc'
+import { LatestSubmissions } from './_components/problems/latest-submissions'
+import { ProposedProblems } from './_components/problems/proposed-problems'
+import { getQueryClient, trpc } from './_trpc/rsc'
 
-const FACETS_PAGE_SIZE = 100
+const PROPOSED_PROBLEMS_LIMIT = 6
 
-type HomePageProps = {
-  searchParams: Promise<RawSearchParams>
-}
-
-export default async function HomePage({ searchParams }: HomePageProps) {
-  const params = parseProblemListParams(await searchParams)
-
-  // Renders the first page on the server; the client takes over from here for
-  // filter, sort and paging changes. The layout's own HydrationBoundary is
-  // dehydrated before this async component runs, so this page needs its own,
-  // built after prefetching, for the client query to pick up the SSR data.
-  await Promise.all([
-    prefetchAwaited(trpc.task.listProblems.queryOptions(params)),
-    prefetchAwaited(trpc.task.listProblems.queryOptions({ pageSize: FACETS_PAGE_SIZE }))
-  ])
+/** The dashboard: what the judge is doing right now, and what to solve next. */
+export default async function HomePage() {
+  const { problems } = await getQueryClient().fetchQuery(trpc.task.listProblems.queryOptions({}))
 
   return (
-    <main className='mx-auto flex w-full max-w-5xl flex-col gap-6 p-6'>
-      <PageHeader
-        title='Problems'
-        description='Browse problems and see what the community is solving.'
-      />
-      <div className='flex flex-col gap-6 lg:flex-row lg:items-start'>
-        <div className='flex min-w-0 flex-1 flex-col gap-4'>
-          <HydrationBoundary state={dehydrate(getQueryClient())}>
-            <ProblemListSection />
-          </HydrationBoundary>
+    <div className='space-y-8'>
+      <header className='space-y-1'>
+        <h1 className='font-bold text-2xl text-foreground tracking-tight sm:text-3xl'>Dashboard</h1>
+        <p className='max-w-2xl text-muted text-sm sm:text-base'>
+          Browse proposed problems and watch the latest submissions as they move through the judge
+          queue.
+        </p>
+      </header>
+
+      <div className='grid gap-6 lg:grid-cols-5'>
+        <div className='lg:col-span-3'>
+          <LatestSubmissions />
         </div>
-        <div className='w-full lg:w-80 lg:shrink-0'>
-          <ActivityPanel />
+        <div className='lg:col-span-2'>
+          <ProposedProblems problems={problems.slice(0, PROPOSED_PROBLEMS_LIMIT)} />
         </div>
       </div>
-    </main>
+    </div>
   )
 }

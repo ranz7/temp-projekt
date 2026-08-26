@@ -3,38 +3,38 @@ type ProblemPaginationProps = {
   pageSize: number
   total: number
   onPageChange: (page: number) => void
+  disabled?: boolean
 }
 
-/** "Showing X to Y of N", the current page, and disabled-at-the-ends previous/next controls. */
-export function ProblemPagination({ page, pageSize, total, onPageChange }: ProblemPaginationProps) {
-  const from = total === 0 ? 0 : (page - 1) * pageSize + 1
-  const to = Math.min(page * pageSize, total)
+/** The list footer: step a page back or forward, greyed out at either end. */
+export function ProblemPagination({
+  page,
+  pageSize,
+  total,
+  onPageChange,
+  disabled = false
+}: ProblemPaginationProps) {
   const hasPrevious = page > 1
   const hasNext = page * pageSize < total
 
   return (
-    <div className='flex flex-wrap items-center justify-between gap-3 text-sm'>
-      <p className='text-muted'>
-        Showing {from} to {to} of {total} - page {page}
-      </p>
-      <div className='flex items-center gap-2'>
-        <button
-          type='button'
-          disabled={!hasPrevious}
-          onClick={() => onPageChange(page - 1)}
-          className='rounded-lg border border-border px-3 py-1.5 disabled:opacity-40'
-        >
-          Previous
-        </button>
-        <button
-          type='button'
-          disabled={!hasNext}
-          onClick={() => onPageChange(page + 1)}
-          className='rounded-lg border border-border px-3 py-1.5 disabled:opacity-40'
-        >
-          Next
-        </button>
-      </div>
+    <div className='flex flex-wrap items-center justify-between gap-3 border-divider border-t px-4 py-3 sm:px-5'>
+      <button
+        type='button'
+        disabled={!hasPrevious || disabled}
+        onClick={() => onPageChange(page - 1)}
+        className='btn-secondary'
+      >
+        Previous
+      </button>
+      <button
+        type='button'
+        disabled={!hasNext || disabled}
+        onClick={() => onPageChange(page + 1)}
+        className='btn-secondary'
+      >
+        Next
+      </button>
     </div>
   )
 }

@@ -5,15 +5,24 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-border: var(--border);
+  --color-divider: var(--divider);
   --color-muted: var(--muted);
+  --color-meta: var(--meta);
+  --color-subtle: var(--subtle);
+  --color-subtle-foreground: var(--subtle-foreground);
   --color-placeholder: var(--placeholder);
   --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
   --color-accent-foreground: var(--accent-foreground);
+  --color-accent-ring: var(--accent-ring);
   --color-danger: var(--danger);
   --color-danger-foreground: var(--danger-foreground);
   --color-status-neutral: var(--status-neutral);
@@ -23,46 +32,133 @@
   --color-status-amber: var(--status-amber);
   --color-status-orange: var(--status-orange);
   --color-status-violet: var(--status-violet);
+  --color-tint-neutral: var(--tint-neutral);
+  --color-tint-neutral-ink: var(--tint-neutral-ink);
+  --color-tint-neutral-ring: var(--tint-neutral-ring);
+  --color-tint-blue: var(--tint-blue);
+  --color-tint-blue-ink: var(--tint-blue-ink);
+  --color-tint-blue-ring: var(--tint-blue-ring);
+  --color-tint-green: var(--tint-green);
+  --color-tint-green-ink: var(--tint-green-ink);
+  --color-tint-green-ring: var(--tint-green-ring);
+  --color-tint-red: var(--tint-red);
+  --color-tint-red-ink: var(--tint-red-ink);
+  --color-tint-red-ring: var(--tint-red-ring);
+  --color-tint-amber: var(--tint-amber);
+  --color-tint-amber-ink: var(--tint-amber-ink);
+  --color-tint-amber-ring: var(--tint-amber-ring);
+  --color-tint-orange: var(--tint-orange);
+  --color-tint-orange-ink: var(--tint-orange-ink);
+  --color-tint-orange-ring: var(--tint-orange-ring);
+  --color-tint-violet: var(--tint-violet);
+  --color-tint-violet-ink: var(--tint-violet-ink);
+  --color-tint-violet-ring: var(--tint-violet-ring);
 }
 
+/*
+  Palette: cool slate surfaces with a single blue accent, light and dark.
+  Every colour in the app comes from here - components never name a shade.
+*/
 :root {
-  --background: #f6f4ef;
-  --foreground: #1c1917;
+  color-scheme: light;
+
+  --background: #f8fafc;
+  --foreground: #0f172a;
   --card: #ffffff;
-  --border: #e7e5e4;
-  --muted: #57534e;
-  --placeholder: #e7e5e4;
-  --accent: #4338ca;
+  --border: #e2e8f0;
+  --divider: #f1f5f9;
+  --muted: #64748b;
+  --meta: #94a3b8;
+  --subtle: #f8fafc;
+  --subtle-foreground: #475569;
+  --placeholder: #f1f5f9;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
   --accent-foreground: #ffffff;
+  --accent-ring: #dbeafe;
   --danger: #dc2626;
   --danger-foreground: #ffffff;
-  --status-neutral: #78716c;
-  --status-blue: #2563eb;
-  --status-green: #16a34a;
-  --status-red: #dc2626;
+
+  --status-neutral: #64748b;
+  --status-blue: #0284c7;
+  --status-green: #059669;
+  --status-red: #e11d48;
   --status-amber: #d97706;
   --status-orange: #ea580c;
   --status-violet: #7c3aed;
+
+  --tint-neutral: #f1f5f9;
+  --tint-neutral-ink: #334155;
+  --tint-neutral-ring: #e2e8f0;
+  --tint-blue: #f0f9ff;
+  --tint-blue-ink: #075985;
+  --tint-blue-ring: #bae6fd;
+  --tint-green: #ecfdf5;
+  --tint-green-ink: #065f46;
+  --tint-green-ring: #a7f3d0;
+  --tint-red: #fff1f2;
+  --tint-red-ink: #9f1239;
+  --tint-red-ring: #fecdd3;
+  --tint-amber: #fffbeb;
+  --tint-amber-ink: #78350f;
+  --tint-amber-ring: #fde68a;
+  --tint-orange: #fff7ed;
+  --tint-orange-ink: #7c2d12;
+  --tint-orange-ring: #fed7aa;
+  --tint-violet: #f5f3ff;
+  --tint-violet-ink: #5b21b6;
+  --tint-violet-ring: #ddd6fe;
 }
 
 .dark {
-  --background: #121110;
-  --foreground: #f5f5f4;
-  --card: #1c1a19;
-  --border: #322f2d;
-  --muted: #a8a29e;
-  --placeholder: #292524;
-  --accent: #818cf8;
-  --accent-foreground: #1e1b4b;
+  color-scheme: dark;
+
+  --background: #020617;
+  --foreground: #f1f5f9;
+  --card: #0f172a;
+  --border: #334155;
+  --divider: #1e293b;
+  --muted: #94a3b8;
+  --meta: #64748b;
+  --subtle: #1e293b;
+  --subtle-foreground: #cbd5e1;
+  --placeholder: #1e293b;
+  --accent: #3b82f6;
+  --accent-hover: #60a5fa;
+  --accent-foreground: #ffffff;
+  --accent-ring: #1e3a5f;
   --danger: #f87171;
   --danger-foreground: #450a0a;
-  --status-neutral: #a8a29e;
-  --status-blue: #60a5fa;
-  --status-green: #4ade80;
-  --status-red: #f87171;
+
+  --status-neutral: #94a3b8;
+  --status-blue: #38bdf8;
+  --status-green: #34d399;
+  --status-red: #fb7185;
   --status-amber: #fbbf24;
   --status-orange: #fb923c;
   --status-violet: #a78bfa;
+
+  --tint-neutral: #1e293b;
+  --tint-neutral-ink: #e2e8f0;
+  --tint-neutral-ring: #475569;
+  --tint-blue: #082f49;
+  --tint-blue-ink: #bae6fd;
+  --tint-blue-ring: #075985;
+  --tint-green: #022c22;
+  --tint-green-ink: #a7f3d0;
+  --tint-green-ring: #065f46;
+  --tint-red: #4c0519;
+  --tint-red-ink: #fecdd3;
+  --tint-red-ring: #9f1239;
+  --tint-amber: #451a03;
+  --tint-amber-ink: #fef3c7;
+  --tint-amber-ring: #92400e;
+  --tint-orange: #431407;
+  --tint-orange-ink: #ffedd5;
+  --tint-orange-ring: #9a3412;
+  --tint-violet: #2e1065;
+  --tint-violet-ink: #ddd6fe;
+  --tint-violet-ring: #5b21b6;
 }
 
 html {
@@ -75,18 +171,184 @@ body {
   font-family: var(--font-sans);
 }
 
+/* Badges for a submission still being judged breathe, so a page that is
+   waiting looks like it is waiting even when nothing else moves. */
 @keyframes oj-pulse {
   0%,
   100% {
-    opacity: 1;
+    transform: scale(1);
+    filter: brightness(1);
   }
   50% {
-    opacity: 0.5;
+    transform: scale(1.14);
+    filter: brightness(1.12);
   }
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .oj-pulse {
-    animation: oj-pulse 1.8s ease-in-out infinite;
+    animation: oj-pulse 0.85s ease-in-out infinite;
+    will-change: transform;
+  }
+}
+
+/*
+  Shared surfaces. Screens reach for these class names instead of repeating
+  long utility strings, which is what keeps every list, panel and pill in the
+  app looking like the same product.
+*/
+@layer components {
+  /* Panels */
+  .card {
+    @apply overflow-hidden rounded-xl border border-border bg-card shadow-sm;
+  }
+
+  .card-header {
+    @apply flex items-center justify-between border-divider border-b px-4 py-3 sm:px-5;
+  }
+
+  .card-title {
+    @apply font-semibold text-base text-foreground;
+  }
+
+  .card-subtitle {
+    @apply text-muted text-xs;
+  }
+
+  .card-action {
+    @apply font-medium text-accent text-sm hover:text-accent-hover;
+  }
+
+  /* Tables */
+  .data-table {
+    @apply min-w-full text-left text-sm;
+  }
+
+  .data-table thead {
+    @apply bg-subtle text-muted text-xs uppercase tracking-wide;
+  }
+
+  .th {
+    @apply px-4 py-2.5 font-medium sm:px-5;
+  }
+
+  .td {
+    @apply px-4 py-3 sm:px-5;
+  }
+
+  .tr {
+    @apply hover:bg-subtle;
+  }
+
+  /* A problem, written the same way wherever it appears */
+  .task-code {
+    @apply font-mono font-semibold text-accent text-xs;
+  }
+
+  .task-title {
+    @apply text-foreground/90;
+  }
+
+  .task-link {
+    @apply inline-flex flex-col gap-0.5;
+  }
+
+  .task-link:hover .task-code {
+    @apply underline;
+  }
+
+  .task-link:hover .task-title {
+    @apply text-accent;
+  }
+
+  /* Pills */
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 font-medium text-xs ring-1 ring-inset;
+  }
+
+  .tag {
+    @apply rounded bg-placeholder px-1.5 py-0.5 text-[11px] text-subtle-foreground;
+  }
+
+  .muted-meta {
+    @apply text-[11px] text-meta tabular-nums;
+  }
+
+  /* Controls */
+  .field {
+    @apply rounded-md border border-border bg-card px-3 py-2 text-foreground text-sm shadow-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent-ring;
+  }
+
+  .btn-secondary {
+    @apply rounded-md border border-border bg-card px-3 py-2 font-medium text-foreground/90 text-sm shadow-sm transition hover:bg-subtle disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .btn-primary {
+    @apply rounded-md bg-accent px-4 py-2 font-medium text-accent-foreground text-sm shadow-sm transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  /* Problem page: statement beside a panel that stays put while you read */
+  .problem-detail-layout {
+    @apply grid gap-6 xl:grid-cols-2 xl:items-stretch;
+  }
+
+  .problem-detail-statement {
+    @apply min-w-0;
+  }
+
+  .problem-detail-panel {
+    @apply flex min-h-[32rem] flex-col xl:sticky xl:top-16 xl:max-h-[calc(100vh-5rem)] xl:min-h-[calc(100vh-5rem)];
+  }
+
+  .panel-tab {
+    @apply flex-1 px-4 py-3 text-center font-medium text-muted text-sm transition hover:bg-subtle hover:text-foreground;
+  }
+
+  .panel-tab--active {
+    @apply border-accent border-b-2 text-accent;
+  }
+
+  /* Statements */
+  .statement-h {
+    @apply mb-2 font-semibold text-muted text-sm uppercase tracking-wide;
+  }
+
+  .statement-p {
+    @apply text-foreground/90 text-sm leading-relaxed;
+  }
+
+  .statement-p .katex {
+    font-size: 1.05em;
+  }
+
+  .statement-p .katex-display {
+    @apply my-3 overflow-x-auto;
+  }
+
+  .sample-block {
+    @apply rounded-lg border border-divider bg-subtle p-3;
+  }
+
+  .sample-pre {
+    @apply overflow-x-auto rounded-md bg-card p-3 font-mono text-foreground/90 text-xs ring-1 ring-border;
+  }
+
+  /* Submit panel */
+  .submit-form {
+    @apply flex h-full min-h-0 flex-col gap-3 p-4 sm:p-5;
+  }
+
+  .submit-editor-block {
+    @apply flex min-h-0 flex-1 flex-col;
+  }
+
+  .monaco-wrap {
+    @apply flex-1 overflow-hidden rounded-md ring-1 ring-border;
+    min-height: 36rem;
+    height: min(70vh, 48rem);
+  }
+
+  .monaco-loading {
+    @apply flex h-full min-h-[36rem] items-center justify-center bg-subtle text-muted text-sm;
   }
 }

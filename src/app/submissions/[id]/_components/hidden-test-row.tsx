@@ -9,12 +9,10 @@ type HiddenTestRowProps = {
 /** A hidden test: the server never sends its input, expected output or actual output, so this never implies it has them. */
 export function HiddenTestRow({ test }: HiddenTestRowProps) {
   return (
-    <div className='flex flex-col gap-2 rounded-xl border border-border bg-card p-4'>
+    <div className='card flex flex-col gap-2 p-4'>
       <div className='flex flex-wrap items-center justify-between gap-2'>
         <p className='font-medium text-sm'>Hidden test {test.ordinal}</p>
-        <span
-          className={`rounded-full px-2.5 py-1 font-medium text-xs ${testVerdictAccentClass(test.verdict)}`}
-        >
+        <span className={`badge ${testVerdictAccentClass(test.verdict)}`}>
           {TEST_VERDICT_LABELS[test.verdict]}
         </span>
       </div>

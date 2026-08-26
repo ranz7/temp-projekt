@@ -35,7 +35,7 @@ export function FleetSummary({ machines }: FleetSummaryProps) {
   return (
     <div className='grid grid-cols-2 gap-3 sm:grid-cols-4'>
       {tiles.map(tile => (
-        <Card key={tile.key} className='gap-1 p-4'>
+        <Card key={tile.key} className='flex flex-col gap-1 p-4'>
           <span className='text-muted text-xs uppercase tracking-wide'>{tile.label}</span>
           <span className={`font-semibold text-2xl tabular-nums ${tile.accentClassName}`}>
             {formatCount(tile.value)}

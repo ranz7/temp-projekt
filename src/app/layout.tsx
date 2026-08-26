@@ -1,17 +1,10 @@
 import { dehydrate } from '@tanstack/react-query'
-import { Inter } from 'next/font/google'
 import Script from 'next/script'
 import type { ReactNode } from 'react'
 import { SiteHeader } from './_components/site-header'
 import { getQueryClient } from './_trpc/rsc'
 import './globals.css'
 import { GlobalProviders } from './providers'
-
-const inter = Inter({
-  subsets: ['latin', 'latin-ext'],
-  variable: '--font-inter',
-  display: 'swap'
-})
 
 export const metadata = {
   title: 'Online Judge',
@@ -37,7 +30,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   const dehydratedState = dehydrate(getQueryClient())
 
   return (
-    <html lang='en' className={inter.variable} suppressHydrationWarning>
+    <html lang='en' suppressHydrationWarning>
       <body className='bg-background text-foreground antialiased'>
         <Script id='oj-theme-init' strategy='beforeInteractive'>
           {THEME_INIT_SCRIPT}
@@ -45,7 +38,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <GlobalProviders dehydratedState={dehydratedState}>
           <div className='flex min-h-svh flex-col'>
             <SiteHeader />
-            {children}
+            <main className='mx-auto w-full max-w-6xl px-4 py-8 sm:px-6'>{children}</main>
           </div>
         </GlobalProviders>
       </body>
