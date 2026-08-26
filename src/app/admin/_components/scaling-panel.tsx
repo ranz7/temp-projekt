@@ -96,6 +96,9 @@ export function ScalingPanel({ run, problems, machinesAnswering }: ScalingPanelP
                   <p className='font-bold text-3xl text-status-green tabular-nums sm:text-4xl'>
                     x<AnimatedNumber value={speedUp} format={value => value.toFixed(2)} />
                   </p>
+                  <p className='text-meta text-xs tabular-nums'>
+                    x{latest?.machineCount ?? 0} if every machine were fully used
+                  </p>
                 </div>
               ) : null}
 
