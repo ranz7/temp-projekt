@@ -103,12 +103,12 @@ export function ScalingPanel({ run, problems, machinesAnswering }: ScalingPanelP
                   alone, whether another machine would buy anything at all. */}
               {latest?.slotsBusy != null && latest.slotsTotal != null ? (
                 <div className='flex flex-col gap-1'>
-                  <p className='text-muted text-xs uppercase tracking-wide'>Judging slots busy</p>
+                  <p className='text-muted text-xs uppercase tracking-wide'>Judged at once</p>
                   <p className='font-bold text-3xl text-foreground tabular-nums sm:text-4xl'>
                     <AnimatedNumber value={latest.slotsBusy} format={formatRate} />
                     <span className='font-normal text-base text-muted sm:text-lg'>
                       {' '}
-                      of {latest.slotsTotal}
+                      of {latest.slotsTotal} slots
                     </span>
                   </p>
                 </div>

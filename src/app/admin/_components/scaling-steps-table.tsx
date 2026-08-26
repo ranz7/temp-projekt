@@ -27,7 +27,7 @@ export function ScalingStepsTable({ steps, currentMachineCount }: ScalingStepsTa
           <th className='th'>Took</th>
           <th className='th'>Per minute</th>
           <th className='th'>Per machine</th>
-          <th className='th'>Slots busy</th>
+          <th className='th'>Judged at once</th>
           <th className='th'>Against one machine</th>
         </tr>
       </thead>

@@ -78,27 +78,43 @@ async function keepOnlyFirst(
 }
 
 /**
- * Asks the working machines how many of their judging slots are filled right now, and
- * adds the answer to the step's running total. Sampled rather than derived, because
- * the only honest way to know whether another machine would help is to look at
- * whether the ones already there are busy.
+ * How much of the fleet is actually working at this instant: the step's own solutions
+ * that are being judged right now, against every judging slot the working machines
+ * offer. Counted from the submissions rather than from what each machine last
+ * reported about itself, because a machine only reports every few seconds and a short
+ * step would be measured mostly between those reports.
  */
-async function sampleSaturation(database: Database, stepId: string): Promise<void> {
+async function sampleSaturation(
+  database: Database,
+  stepId: string,
+  batchId: string
+): Promise<void> {
+  const [inFlight] = await database
+    .select({ count: sql<number>`count(*)::int` })
+    .from(benchmark__batch_submission_)
+    .innerJoin(
+      submission__submission_,
+      eq(submission__submission_.id, benchmark__batch_submission_.submission_id_)
+    )
+    .where(
+      and(
+        eq(benchmark__batch_submission_.batch_id_, batchId),
+        eq(submission__submission_.status_, 'running')
+      )
+    )
+
   const [slots] = await database
-    .select({
-      busy: sql<number>`coalesce(sum(${machine__machine_.busy_}), 0)::int`,
-      capacity: sql<number>`coalesce(sum(${machine__machine_.capacity_}), 0)::int`
-    })
+    .select({ capacity: sql<number>`coalesce(sum(${machine__machine_.capacity_}), 0)::int` })
     .from(machine__machine_)
     .where(and(eq(machine__machine_.enabled_, true), eq(machine__machine_.reachable_, true)))
 
-  if (slots === undefined) return
+  if (slots === undefined || inFlight === undefined) return
 
   await database
     .update(benchmark__scaling_step_)
     .set({
       busy_samples_: sql`${benchmark__scaling_step_.busy_samples_} + 1`,
-      busy_total_: sql`${benchmark__scaling_step_.busy_total_} + ${slots.busy}`,
+      busy_total_: sql`${benchmark__scaling_step_.busy_total_} + ${inFlight.count}`,
       capacity_total_: sql`${benchmark__scaling_step_.capacity_total_} + ${slots.capacity}`
     })
     .where(eq(benchmark__scaling_step_.id, stepId))
@@ -130,7 +146,7 @@ async function waitForStep(
 
     if ((pending?.count ?? 0) === 0) return
 
-    await sampleSaturation(database, stepId)
+    await sampleSaturation(database, stepId, batchId)
 
     if (!(await isStillRunning(database, runId))) return
 
