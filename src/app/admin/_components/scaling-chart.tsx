@@ -40,8 +40,8 @@ export function ScalingChart({ steps, currentMachineCount, maxMachines }: Scalin
         <span className='tabular-nums'>peak {formatRate(highest)} / min</span>
         <span className='flex items-center gap-3'>
           <span className='flex items-center gap-1'>
-            <span className='h-0.5 w-4 border-meta border-t border-dashed' />
-            perfect scaling
+            <span className='h-0.5 w-4 border-status-green border-t-2 border-dashed' />
+            if every machine were fully used
           </span>
           <span className='flex items-center gap-1'>
             <span className='size-2 rounded-xs bg-accent' />
@@ -65,10 +65,11 @@ export function ScalingChart({ steps, currentMachineCount, maxMachines }: Scalin
             y1={y(first)}
             x2={100 - columnWidth / 2}
             y2={y(first * maxMachines)}
-            className='text-meta'
+            className='text-status-green'
             stroke='currentColor'
-            strokeWidth='0.4'
-            strokeDasharray='2 2'
+            strokeWidth='2'
+            strokeDasharray='6 5'
+            strokeLinecap='round'
             vectorEffect='non-scaling-stroke'
           />
         ) : null}

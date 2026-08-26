@@ -117,11 +117,16 @@ export function ScalingPanel({ run, problems, machinesAnswering }: ScalingPanelP
           </div>
 
           <div className='flex flex-col gap-2'>
-            <MachineLamps
-              total={run.maxMachines}
-              lit={run.currentMachineCount ?? latest?.machineCount ?? 0}
-              isClimbing={isRunning}
-            />
+            <div className='flex flex-wrap items-center gap-3'>
+              <MachineLamps
+                total={run.maxMachines}
+                lit={run.currentMachineCount ?? latest?.machineCount ?? 0}
+                isClimbing={isRunning}
+              />
+              <span className='text-meta text-xs tabular-nums'>
+                {run.currentMachineCount ?? latest?.machineCount ?? 0} of {run.maxMachines} machines
+              </span>
+            </div>
             {isRunning && current !== null ? (
               <div className='flex flex-col gap-1'>
                 <div className='h-1.5 w-full overflow-hidden rounded-full bg-placeholder'>
